@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		26652B1C2F9B256100646A0F /* BlueskyCore in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B162F9B255B00646A0F /* BlueskyCore */; };
+		26652B1D2F9B256200646A0F /* BlueskyKit in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B172F9B255C00646A0F /* BlueskyKit */; };
+		26652B1E2F9B256300646A0F /* BlueskyAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B182F9B255D00646A0F /* BlueskyAuth */; };
+		26652B1F2F9B256400646A0F /* BlueskyDataStore in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B192F9B255E00646A0F /* BlueskyDataStore */; };
+		26652B202F9B256500646A0F /* BlueskyUI in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B1A2F9B255F00646A0F /* BlueskyUI */; };
+		26652B212F9B256600646A0F /* BlueskyNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B1B2F9B256000646A0F /* BlueskyNetworking */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		26652AD72F9B150500646A0F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -53,6 +62,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				26652B1C2F9B256100646A0F /* BlueskyCore in Frameworks */,
+				26652B1D2F9B256200646A0F /* BlueskyKit in Frameworks */,
+				26652B1E2F9B256300646A0F /* BlueskyAuth in Frameworks */,
+				26652B1F2F9B256400646A0F /* BlueskyDataStore in Frameworks */,
+				26652B202F9B256500646A0F /* BlueskyUI in Frameworks */,
+				26652B212F9B256600646A0F /* BlueskyNetworking in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,6 +137,12 @@
 			);
 			name = "Bluesky-SwiftUI";
 			packageProductDependencies = (
+				26652B162F9B255B00646A0F /* BlueskyCore */,
+				26652B172F9B255C00646A0F /* BlueskyKit */,
+				26652B182F9B255D00646A0F /* BlueskyAuth */,
+				26652B192F9B255E00646A0F /* BlueskyDataStore */,
+				26652B1A2F9B255F00646A0F /* BlueskyUI */,
+				26652B1B2F9B256000646A0F /* BlueskyNetworking */,
 			);
 			productName = "Bluesky-SwiftUI";
 			productReference = 26652AC92F9B150300646A0F /* Bluesky.app */;
@@ -207,6 +228,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				26652B142F9B255900646A0F /* XCLocalSwiftPackageReference "BlueskyPackage" */,
+				26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../../BlueskyKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 26652ACA2F9B150300646A0F /* Products */;
@@ -584,7 +606,44 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = BlueskyPackage;
 		};
+		26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../../BlueskyKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../BlueskyKit;
+		};
 /* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		26652B162F9B255B00646A0F /* BlueskyCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../../BlueskyKit" */;
+			productName = BlueskyCore;
+		};
+		26652B172F9B255C00646A0F /* BlueskyKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../../BlueskyKit" */;
+			productName = BlueskyKit;
+		};
+		26652B182F9B255D00646A0F /* BlueskyAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../../BlueskyKit" */;
+			productName = BlueskyAuth;
+		};
+		26652B192F9B255E00646A0F /* BlueskyDataStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../../BlueskyKit" */;
+			productName = BlueskyDataStore;
+		};
+		26652B1A2F9B255F00646A0F /* BlueskyUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../../BlueskyKit" */;
+			productName = BlueskyUI;
+		};
+		26652B1B2F9B256000646A0F /* BlueskyNetworking */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../../BlueskyKit" */;
+			productName = BlueskyNetworking;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 26652AC12F9B150300646A0F /* Project object */;
 }

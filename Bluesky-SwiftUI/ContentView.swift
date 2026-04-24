@@ -1,19 +1,14 @@
-// ContentView.swift
-
 import SwiftUI
+import BlueskyAuth
 
-struct ContentView: View {
+struct RootView: View {
+    @Environment(SessionManager.self) private var session
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        if session.currentAccount != nil {
+            MainTabView()
+        } else {
+            LoginView(session: session, onSuccess: {})
         }
-        .padding()
     }
-}
-
-#Preview {
-    ContentView()
 }
