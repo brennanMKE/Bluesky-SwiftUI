@@ -1,12 +1,16 @@
 import SwiftUI
 import BlueskyAuth
 import BlueskyCore
+import BlueskyKit
+import BlueskyFeed
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
+    @Environment(BlueskyEnvironment.self) private var env
     @State private var selectedTab: AppTab? = .home
     @State private var messageBadge = 0
     @State private var notificationBadge = 0
+    @State private var threadURI: ATURI?
 
     var body: some View {
         #if os(macOS)
@@ -94,7 +98,19 @@ struct MainTabView: View {
     private func tabContent(_ tab: AppTab) -> some View {
         switch tab {
         case .home:
-            placeholderScreen("Home", systemImage: "house")
+            FeedView(
+                network: env.network,
+                accountStore: env.accounts,
+                onPostTap: { post in threadURI = post.uri }
+            )
+            .navigationDestination(isPresented: Binding(
+                get: { threadURI != nil },
+                set: { if !$0 { threadURI = nil } }
+            )) {
+                if let uri = threadURI {
+                    ThreadView(uri: uri, network: env.network)
+                }
+            }
         case .search:
             placeholderScreen("Search", systemImage: "magnifyingglass")
         case .messages:
