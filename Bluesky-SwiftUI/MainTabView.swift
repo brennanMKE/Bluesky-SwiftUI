@@ -5,6 +5,7 @@ import BlueskyKit
 import BlueskyFeed
 import BlueskyProfile
 import BlueskySearch
+import BlueskyNotifications
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
@@ -118,7 +119,10 @@ struct MainTabView: View {
         case .messages:
             placeholderScreen("Messages", systemImage: "bubble.left.and.bubble.right")
         case .notifications:
-            placeholderScreen("Notifications", systemImage: "bell")
+            NotificationsScreen(
+                network: env.network,
+                onUnreadCountChange: { count in notificationBadge = count }
+            )
         case .profile:
             if let account = session.currentAccount {
                 ProfileScreen(
