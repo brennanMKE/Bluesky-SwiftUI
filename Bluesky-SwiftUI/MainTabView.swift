@@ -4,6 +4,7 @@ import BlueskyCore
 import BlueskyKit
 import BlueskyFeed
 import BlueskyProfile
+import BlueskySearch
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
@@ -113,7 +114,7 @@ struct MainTabView: View {
                 }
             }
         case .search:
-            placeholderScreen("Search", systemImage: "magnifyingglass")
+            SearchScreen(network: env.network)
         case .messages:
             placeholderScreen("Messages", systemImage: "bubble.left.and.bubble.right")
         case .notifications:
