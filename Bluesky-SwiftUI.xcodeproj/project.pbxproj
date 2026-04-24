@@ -14,6 +14,7 @@
 		26652B202F9B256500646A0F /* BlueskyUI in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B1A2F9B255F00646A0F /* BlueskyUI */; };
 		26652B212F9B256600646A0F /* BlueskyNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B1B2F9B256000646A0F /* BlueskyNetworking */; };
 		26652B312F9B265100646A0F /* BlueskyFeed in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B302F9B265000646A0F /* BlueskyFeed */; };
+		26652B352F9B265500646A0F /* BlueskyProfile in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B342F9B265400646A0F /* BlueskyProfile */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +71,7 @@
 				26652B202F9B256500646A0F /* BlueskyUI in Frameworks */,
 				26652B212F9B256600646A0F /* BlueskyNetworking in Frameworks */,
 				26652B312F9B265100646A0F /* BlueskyFeed in Frameworks */,
+				26652B352F9B265500646A0F /* BlueskyProfile in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -146,6 +148,7 @@
 				26652B1A2F9B255F00646A0F /* BlueskyUI */,
 				26652B1B2F9B256000646A0F /* BlueskyNetworking */,
 				26652B302F9B265000646A0F /* BlueskyFeed */,
+				26652B342F9B265400646A0F /* BlueskyProfile */,
 			);
 			productName = "Bluesky-SwiftUI";
 			productReference = 26652AC92F9B150300646A0F /* Bluesky.app */;
@@ -650,6 +653,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
 			productName = BlueskyFeed;
+		};
+		26652B342F9B265400646A0F /* BlueskyProfile */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
+			productName = BlueskyProfile;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -3,6 +3,7 @@ import BlueskyAuth
 import BlueskyCore
 import BlueskyKit
 import BlueskyFeed
+import BlueskyProfile
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
@@ -118,8 +119,16 @@ struct MainTabView: View {
         case .notifications:
             placeholderScreen("Notifications", systemImage: "bell")
         case .profile:
-            let title = session.currentAccount.map { "@\($0.handle.rawValue)" } ?? "Profile"
-            placeholderScreen(title, systemImage: "person.circle")
+            if let account = session.currentAccount {
+                ProfileScreen(
+                    actorDID: account.did,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    viewerDID: account.did
+                )
+            } else {
+                placeholderScreen("Profile", systemImage: "person.circle")
+            }
         }
     }
 
