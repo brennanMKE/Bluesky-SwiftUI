@@ -6,6 +6,7 @@ import BlueskyFeed
 import BlueskyProfile
 import BlueskySearch
 import BlueskyNotifications
+import BlueskyMessages
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
@@ -117,7 +118,10 @@ struct MainTabView: View {
         case .search:
             SearchScreen(network: env.network)
         case .messages:
-            placeholderScreen("Messages", systemImage: "bubble.left.and.bubble.right")
+            ConversationListScreen(
+                network: env.network,
+                viewerDID: session.currentAccount?.did
+            )
         case .notifications:
             NotificationsScreen(
                 network: env.network,

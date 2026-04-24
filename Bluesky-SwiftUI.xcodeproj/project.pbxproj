@@ -17,6 +17,7 @@
 		26652B352F9B265500646A0F /* BlueskyProfile in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B342F9B265400646A0F /* BlueskyProfile */; };
 		26652B372F9B265700646A0F /* BlueskySearch in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B362F9B265600646A0F /* BlueskySearch */; };
 		26652B392F9B265900646A0F /* BlueskyNotifications in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B382F9B265800646A0F /* BlueskyNotifications */; };
+		26652B3B2F9B265B00646A0F /* BlueskyMessages in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B3A2F9B265A00646A0F /* BlueskyMessages */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +77,7 @@
 				26652B352F9B265500646A0F /* BlueskyProfile in Frameworks */,
 				26652B372F9B265700646A0F /* BlueskySearch in Frameworks */,
 				26652B392F9B265900646A0F /* BlueskyNotifications in Frameworks */,
+				26652B3B2F9B265B00646A0F /* BlueskyMessages in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,6 +157,7 @@
 				26652B342F9B265400646A0F /* BlueskyProfile */,
 				26652B362F9B265600646A0F /* BlueskySearch */,
 				26652B382F9B265800646A0F /* BlueskyNotifications */,
+				26652B3A2F9B265A00646A0F /* BlueskyMessages */,
 			);
 			productName = "Bluesky-SwiftUI";
 			productReference = 26652AC92F9B150300646A0F /* Bluesky.app */;
@@ -674,6 +677,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
 			productName = BlueskyNotifications;
+		};
+		26652B3A2F9B265A00646A0F /* BlueskyMessages */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
+			productName = BlueskyMessages;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
