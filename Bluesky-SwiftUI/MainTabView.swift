@@ -7,6 +7,8 @@ import BlueskyProfile
 import BlueskySearch
 import BlueskyNotifications
 import BlueskyMessages
+import BlueskyComposer
+import BlueskyModeration
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
@@ -15,6 +17,8 @@ struct MainTabView: View {
     @State private var messageBadge = 0
     @State private var notificationBadge = 0
     @State private var threadURI: ATURI?
+    @State private var showComposer = false
+    @State private var showModeration = false
 
     var body: some View {
         #if os(macOS)
@@ -115,6 +119,18 @@ struct MainTabView: View {
                     ThreadView(uri: uri, network: env.network)
                 }
             }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showComposer = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+            }
+            .sheet(isPresented: $showComposer) {
+                ComposerSheet(network: env.network, accountStore: env.accounts)
+            }
         case .search:
             SearchScreen(network: env.network)
         case .messages:
@@ -135,6 +151,18 @@ struct MainTabView: View {
                     accountStore: env.accounts,
                     viewerDID: account.did
                 )
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showModeration = true
+                        } label: {
+                            Image(systemName: "shield")
+                        }
+                    }
+                }
+                .navigationDestination(isPresented: $showModeration) {
+                    ModerationScreen(network: env.network, accountStore: env.accounts)
+                }
             } else {
                 placeholderScreen("Profile", systemImage: "person.circle")
             }

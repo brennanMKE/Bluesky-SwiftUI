@@ -18,6 +18,8 @@
 		26652B372F9B265700646A0F /* BlueskySearch in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B362F9B265600646A0F /* BlueskySearch */; };
 		26652B392F9B265900646A0F /* BlueskyNotifications in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B382F9B265800646A0F /* BlueskyNotifications */; };
 		26652B3B2F9B265B00646A0F /* BlueskyMessages in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B3A2F9B265A00646A0F /* BlueskyMessages */; };
+		26652B3D2F9B265D00646A0F /* BlueskyComposer in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B3C2F9B265C00646A0F /* BlueskyComposer */; };
+		26652B3F2F9B265F00646A0F /* BlueskyModeration in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B3E2F9B265E00646A0F /* BlueskyModeration */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,6 +80,8 @@
 				26652B372F9B265700646A0F /* BlueskySearch in Frameworks */,
 				26652B392F9B265900646A0F /* BlueskyNotifications in Frameworks */,
 				26652B3B2F9B265B00646A0F /* BlueskyMessages in Frameworks */,
+				26652B3D2F9B265D00646A0F /* BlueskyComposer in Frameworks */,
+				26652B3F2F9B265F00646A0F /* BlueskyModeration in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -158,6 +162,8 @@
 				26652B362F9B265600646A0F /* BlueskySearch */,
 				26652B382F9B265800646A0F /* BlueskyNotifications */,
 				26652B3A2F9B265A00646A0F /* BlueskyMessages */,
+				26652B3C2F9B265C00646A0F /* BlueskyComposer */,
+				26652B3E2F9B265E00646A0F /* BlueskyModeration */,
 			);
 			productName = "Bluesky-SwiftUI";
 			productReference = 26652AC92F9B150300646A0F /* Bluesky.app */;
@@ -682,6 +688,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
 			productName = BlueskyMessages;
+		};
+		26652B3C2F9B265C00646A0F /* BlueskyComposer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
+			productName = BlueskyComposer;
+		};
+		26652B3E2F9B265E00646A0F /* BlueskyModeration */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
+			productName = BlueskyModeration;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
