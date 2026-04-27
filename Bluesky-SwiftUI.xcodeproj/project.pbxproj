@@ -20,6 +20,8 @@
 		26652B3B2F9B265B00646A0F /* BlueskyMessages in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B3A2F9B265A00646A0F /* BlueskyMessages */; };
 		26652B3D2F9B265D00646A0F /* BlueskyComposer in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B3C2F9B265C00646A0F /* BlueskyComposer */; };
 		26652B3F2F9B265F00646A0F /* BlueskyModeration in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B3E2F9B265E00646A0F /* BlueskyModeration */; };
+		26652B412F9B266100646A0F /* BlueskySettings in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B402F9B266000646A0F /* BlueskySettings */; };
+		26652B432F9B266300646A0F /* BlueskyLists in Frameworks */ = {isa = PBXBuildFile; productRef = 26652B422F9B266200646A0F /* BlueskyLists */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +84,8 @@
 				26652B3B2F9B265B00646A0F /* BlueskyMessages in Frameworks */,
 				26652B3D2F9B265D00646A0F /* BlueskyComposer in Frameworks */,
 				26652B3F2F9B265F00646A0F /* BlueskyModeration in Frameworks */,
+				26652B412F9B266100646A0F /* BlueskySettings in Frameworks */,
+				26652B432F9B266300646A0F /* BlueskyLists in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -164,6 +168,8 @@
 				26652B3A2F9B265A00646A0F /* BlueskyMessages */,
 				26652B3C2F9B265C00646A0F /* BlueskyComposer */,
 				26652B3E2F9B265E00646A0F /* BlueskyModeration */,
+				26652B402F9B266000646A0F /* BlueskySettings */,
+				26652B422F9B266200646A0F /* BlueskyLists */,
 			);
 			productName = "Bluesky-SwiftUI";
 			productReference = 26652AC92F9B150300646A0F /* Bluesky.app */;
@@ -674,6 +680,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
 			productName = BlueskyModeration;
+		};
+		26652B402F9B266000646A0F /* BlueskySettings */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
+			productName = BlueskySettings;
+		};
+		26652B422F9B266200646A0F /* BlueskyLists */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 26652B152F9B255A00646A0F /* XCLocalSwiftPackageReference "../BlueskyKit" */;
+			productName = BlueskyLists;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

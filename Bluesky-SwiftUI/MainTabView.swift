@@ -9,6 +9,8 @@ import BlueskyNotifications
 import BlueskyMessages
 import BlueskyComposer
 import BlueskyModeration
+import BlueskySettings
+import BlueskyLists
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
@@ -19,6 +21,10 @@ struct MainTabView: View {
     @State private var threadURI: ATURI?
     @State private var showComposer = false
     @State private var showModeration = false
+    @State private var showSettings = false
+    @State private var showBookmarks = false
+    @State private var showSavedFeeds = false
+    @State private var showLists = false
 
     var body: some View {
         #if os(macOS)
@@ -127,6 +133,16 @@ struct MainTabView: View {
                         Image(systemName: "square.and.pencil")
                     }
                 }
+                ToolbarItem(placement: .secondaryAction) {
+                    Button {
+                        showSavedFeeds = true
+                    } label: {
+                        Image(systemName: "list.star")
+                    }
+                }
+            }
+            .navigationDestination(isPresented: $showSavedFeeds) {
+                SavedFeedsScreen(network: env.network)
             }
             .sheet(isPresented: $showComposer) {
                 ComposerSheet(network: env.network, accountStore: env.accounts)
@@ -153,15 +169,39 @@ struct MainTabView: View {
                 )
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            showModeration = true
+                        Menu {
+                            Button("Settings", systemImage: "gear") { showSettings = true }
+                            Button("Bookmarks", systemImage: "bookmark") { showBookmarks = true }
+                            Button("My Lists", systemImage: "list.bullet") { showLists = true }
+                            Button("Moderation", systemImage: "shield") { showModeration = true }
                         } label: {
-                            Image(systemName: "shield")
+                            Image(systemName: "ellipsis.circle")
                         }
                     }
                 }
                 .navigationDestination(isPresented: $showModeration) {
                     ModerationScreen(network: env.network, accountStore: env.accounts)
+                }
+                .navigationDestination(isPresented: $showSettings) {
+                    SettingsScreen(
+                        preferences: env.preferences,
+                        accountStore: env.accounts,
+                        network: env.network,
+                        onModerationTap: { showModeration = true },
+                        onSignOut: {
+                            Task { try? await session.logout(did: account.did) }
+                        }
+                    )
+                }
+                .navigationDestination(isPresented: $showBookmarks) {
+                    BookmarksScreen(network: env.network)
+                }
+                .navigationDestination(isPresented: $showLists) {
+                    ListsScreen(
+                        actorDID: account.did,
+                        network: env.network,
+                        accountStore: env.accounts
+                    )
                 }
             } else {
                 placeholderScreen("Profile", systemImage: "person.circle")
