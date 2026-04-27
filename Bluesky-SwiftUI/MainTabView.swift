@@ -115,6 +115,7 @@ struct MainTabView: View {
             FeedView(
                 network: env.network,
                 accountStore: env.accounts,
+                cache: env.cache,
                 onPostTap: { post in threadURI = post.uri }
             )
             .navigationDestination(isPresented: Binding(
@@ -142,7 +143,7 @@ struct MainTabView: View {
                 }
             }
             .navigationDestination(isPresented: $showSavedFeeds) {
-                SavedFeedsScreen(network: env.network)
+                SavedFeedsScreen(network: env.network, cache: env.cache)
             }
             .sheet(isPresented: $showComposer) {
                 ComposerSheet(network: env.network, accountStore: env.accounts)
@@ -198,7 +199,7 @@ struct MainTabView: View {
                 }
                 .navigationDestination(isPresented: $showLists) {
                     ListsScreen(
-                        actorDID: account.did,
+                        actorDID: account.did.rawValue,
                         network: env.network,
                         accountStore: env.accounts
                     )
