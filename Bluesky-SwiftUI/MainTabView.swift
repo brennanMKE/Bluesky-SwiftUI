@@ -123,7 +123,7 @@ struct MainTabView: View {
                 set: { if !$0 { threadURI = nil } }
             )) {
                 if let uri = threadURI {
-                    ThreadView(uri: uri, network: env.network)
+                    ThreadView(uri: uri, network: env.network, accountStore: env.accounts)
                 }
             }
             .toolbar {
