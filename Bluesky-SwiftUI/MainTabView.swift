@@ -22,6 +22,8 @@ struct MainTabView: View {
     @State private var threadURI: ATURI?
     /// DID of a profile opened via push notification routing.
     @State private var pushProfileDID: String?
+    /// DID of a profile to navigate to from feed/thread author taps.
+    @State private var feedProfileDID: DID?
     @State private var showComposer = false
     @State private var showModeration = false
     @State private var showSettings = false
@@ -146,10 +148,24 @@ struct MainTabView: View {
                 network: env.network,
                 accountStore: env.accounts,
                 cache: env.cache,
-                onPostTap: { post in threadURI = post.uri }
+                onPostTap: { post in threadURI = post.uri },
+                onAuthorTap: { profile in feedProfileDID = profile.did }
             )
             .navigationDestination(item: $threadURI) { uri in
-                ThreadView(uri: uri, network: env.network, accountStore: env.accounts)
+                ThreadView(
+                    uri: uri,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $feedProfileDID) { did in
+                ProfileScreen(
+                    actorDID: did,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    viewerDID: session.currentAccount?.did
+                )
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
