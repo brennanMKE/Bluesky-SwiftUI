@@ -54,8 +54,8 @@ struct MainTabView: View {
     // MARK: - Push notification routing
 
     private func handlePushPostThread(_ note: Foundation.Notification) {
-        guard let uriString = note.object as? String,
-              let uri = ATURI(rawValue: uriString) else { return }
+        guard let uriString = note.object as? String else { return }
+        let uri = ATURI(rawValue: uriString)
         selectedTab = .home
         threadURI = uri
     }
