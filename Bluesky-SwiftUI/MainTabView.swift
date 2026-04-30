@@ -156,7 +156,8 @@ struct MainTabView: View {
                     uri: uri,
                     network: env.network,
                     accountStore: env.accounts,
-                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                    onAuthorTap: { profile in feedProfileDID = profile.did },
+                    onPostTap: { post in threadURI = post.uri }
                 )
             }
             .navigationDestination(item: $feedProfileDID) { did in
