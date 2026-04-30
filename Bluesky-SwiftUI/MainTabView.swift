@@ -159,7 +159,7 @@ struct MainTabView: View {
                         Image(systemName: "square.and.pencil")
                     }
                 }
-                ToolbarItem(placement: .secondaryAction) {
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         showSavedFeeds = true
                     } label: {
