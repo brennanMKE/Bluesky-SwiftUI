@@ -30,6 +30,11 @@ struct Bluesky_SwiftUIApp: App {
                 }
             }
         }
+        // Route deep links (bluesky:// and https://bsky.app/) to the existing
+        // window on macOS rather than spawning a new one. The wildcard set means
+        // "prefer any URL to this scene"; the allowing set is empty so no new
+        // window is created for unmatched URLs.
+        .handlesExternalEvents(preferring: Set(arrayLiteral: "*"), allowing: Set(arrayLiteral: "*"))
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
