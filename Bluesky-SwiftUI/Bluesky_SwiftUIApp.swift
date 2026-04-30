@@ -47,12 +47,15 @@ struct Bluesky_SwiftUIApp: App {
         let prefs = UserDefaultsPreferencesStore(suiteName: "group.co.sstools.bluesky")
         let cache = (try? SwiftDataCacheStore(appGroupIdentifier: "group.co.sstools.bluesky"))
             ?? (try! SwiftDataCacheStore.inMemory())
+        let bookmarkStore = (try? BookmarkStore())
+            ?? (try! BookmarkStore.inMemory())
         let env = BlueskyEnvironment(
             session: sm,
             accounts: accounts,
             preferences: prefs,
             network: network,
-            cache: cache
+            cache: cache,
+            bookmarks: bookmarkStore
         )
         await sm.restoreLastSession()
         session = sm

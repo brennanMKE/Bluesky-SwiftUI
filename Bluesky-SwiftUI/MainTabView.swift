@@ -167,6 +167,7 @@ struct MainTabView: View {
                 network: env.network,
                 accountStore: env.accounts,
                 cache: env.cache,
+                bookmarks: env.bookmarks,
                 onPostTap: { post in threadURI = post.uri },
                 onAuthorTap: { profile in feedProfileDID = profile.did }
             )
@@ -175,6 +176,7 @@ struct MainTabView: View {
                     uri: uri,
                     network: env.network,
                     accountStore: env.accounts,
+                    bookmarks: env.bookmarks,
                     onAuthorTap: { profile in feedProfileDID = profile.did },
                     onPostTap: { post in threadURI = post.uri }
                 )
@@ -256,7 +258,7 @@ struct MainTabView: View {
                     )
                 }
                 .navigationDestination(isPresented: $showBookmarks) {
-                    BookmarksScreen(network: env.network)
+                    BookmarksScreen(store: env.bookmarks)
                 }
                 .navigationDestination(isPresented: $showLists) {
                     ListsScreen(
