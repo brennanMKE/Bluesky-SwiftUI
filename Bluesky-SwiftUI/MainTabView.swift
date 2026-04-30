@@ -93,6 +93,18 @@ struct MainTabView: View {
             NavigationStack {
                 tabContent(selectedTab ?? .home)
             }
+            // Keying the NavigationStack on the selected tab forces SwiftUI to
+            // create a fresh stack instance whenever the tab changes, which
+            // immediately clears any pushed views (e.g. ThreadView) and shows
+            // the new tab's root screen. Without this, macOS keeps the existing
+            // stack alive even though the root content has changed.
+            .id(selectedTab)
+            .onChange(of: selectedTab) { _, _ in
+                // Clear per-tab navigation state so stale destinations
+                // (thread, profile) don't re-appear if the tab is revisited.
+                threadURI = nil
+                feedProfileDID = nil
+            }
         }
     }
     #endif
@@ -117,6 +129,13 @@ struct MainTabView: View {
                 } detail: {
                     NavigationStack {
                         tabContent(selectedTab ?? .home)
+                    }
+                    // Same fix as macOS: reset the stack when the tab changes
+                    // so pushed views don't linger in the detail pane.
+                    .id(selectedTab)
+                    .onChange(of: selectedTab) { _, _ in
+                        threadURI = nil
+                        feedProfileDID = nil
                     }
                 }
             } else {
