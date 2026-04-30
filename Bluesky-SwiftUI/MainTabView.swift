@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import BlueskyAuth
 import BlueskyCore
 import BlueskyKit
@@ -19,6 +20,8 @@ struct MainTabView: View {
     @State private var messageBadge = 0
     @State private var notificationBadge = 0
     @State private var threadURI: ATURI?
+    /// DID of a profile opened via push notification routing.
+    @State private var pushProfileDID: String?
     @State private var showComposer = false
     @State private var showModeration = false
     @State private var showSettings = false
@@ -30,10 +33,37 @@ struct MainTabView: View {
         #if os(macOS)
         macOSSidebar
             .onOpenURL { handleDeepLink($0) }
+            .onReceive(NotificationCenter.default.publisher(for: .openPostThread)) { note in
+                handlePushPostThread(note)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openProfile)) { note in
+                handlePushProfile(note)
+            }
         #else
         adaptiveLayout
             .onOpenURL { handleDeepLink($0) }
+            .onReceive(NotificationCenter.default.publisher(for: .openPostThread)) { note in
+                handlePushPostThread(note)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openProfile)) { note in
+                handlePushProfile(note)
+            }
         #endif
+    }
+
+    // MARK: - Push notification routing
+
+    private func handlePushPostThread(_ note: Foundation.Notification) {
+        guard let uriString = note.object as? String,
+              let uri = ATURI(rawValue: uriString) else { return }
+        selectedTab = .home
+        threadURI = uri
+    }
+
+    private func handlePushProfile(_ note: Foundation.Notification) {
+        guard let did = note.object as? String, !did.isEmpty else { return }
+        pushProfileDID = did
+        selectedTab = .profile
     }
 
     // MARK: - macOS sidebar (NavigationSplitView)
@@ -118,13 +148,8 @@ struct MainTabView: View {
                 cache: env.cache,
                 onPostTap: { post in threadURI = post.uri }
             )
-            .navigationDestination(isPresented: Binding(
-                get: { threadURI != nil },
-                set: { if !$0 { threadURI = nil } }
-            )) {
-                if let uri = threadURI {
-                    ThreadView(uri: uri, network: env.network, accountStore: env.accounts)
-                }
+            .navigationDestination(item: $threadURI) { uri in
+                ThreadView(uri: uri, network: env.network, accountStore: env.accounts)
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

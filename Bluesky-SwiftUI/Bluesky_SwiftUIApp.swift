@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import BlueskyAuth
 import BlueskyDataStore
 import BlueskyNetworking
@@ -6,8 +7,15 @@ import BlueskyKit
 
 @main
 struct Bluesky_SwiftUIApp: App {
+    /// Stored as a property so ARC keeps it alive for the lifetime of the app.
+    private let pushDelegate = PushNotificationDelegate()
+
     @State private var session: SessionManager?
     @State private var environment: BlueskyEnvironment?
+
+    init() {
+        UNUserNotificationCenter.current().delegate = pushDelegate
+    }
 
     var body: some Scene {
         WindowGroup {
