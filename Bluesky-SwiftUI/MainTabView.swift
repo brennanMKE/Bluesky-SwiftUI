@@ -12,10 +12,12 @@ import BlueskyComposer
 import BlueskyModeration
 import BlueskySettings
 import BlueskyLists
+import BlueskyUI
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
     @Environment(BlueskyEnvironment.self) private var env
+    @Environment(\.blueskyTheme) private var theme
     @State private var selectedTab: AppTab? = .home
     @State private var messageBadge = 0
     @State private var notificationBadge = 0
@@ -80,6 +82,7 @@ struct MainTabView: View {
                         .tag(tab)
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Bluesky")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -89,16 +92,23 @@ struct MainTabView: View {
                     .help("Refresh")
                 }
             }
+            .toolbarBackground(theme.colors.background, for: .automatic)
         } detail: {
             NavigationStack {
-                tabContent(selectedTab ?? .home)
+                // ZStack floods the detail column with the theme background from
+                // inside the NavigationStack, overriding the system near-black
+                // material that ignores any .background() applied from outside.
+                ZStack(alignment: .top) {
+                    theme.colors.background.ignoresSafeArea()
+                    tabContent(selectedTab ?? .home)
+                }
             }
             // Keying the NavigationStack on the selected tab forces SwiftUI to
             // create a fresh stack instance whenever the tab changes, which
             // immediately clears any pushed views (e.g. ThreadView) and shows
             // the new tab's root screen. Without this, macOS keeps the existing
             // stack alive even though the root content has changed.
-            .id(selectedTab)
+            .id(selectedTab ?? AppTab.home)
             .onChange(of: selectedTab) { _, _ in
                 // Clear per-tab navigation state so stale destinations
                 // (thread, profile) don't re-appear if the tab is revisited.
@@ -106,6 +116,9 @@ struct MainTabView: View {
                 feedProfileDID = nil
             }
         }
+        .background(theme.colors.background)
+        .toolbarBackground(theme.colors.background, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
     }
     #endif
 
@@ -132,7 +145,7 @@ struct MainTabView: View {
                     }
                     // Same fix as macOS: reset the stack when the tab changes
                     // so pushed views don't linger in the detail pane.
-                    .id(selectedTab)
+                    .id(selectedTab ?? AppTab.home)
                     .onChange(of: selectedTab) { _, _ in
                         threadURI = nil
                         feedProfileDID = nil
