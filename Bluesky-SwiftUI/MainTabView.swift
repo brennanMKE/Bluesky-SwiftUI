@@ -271,7 +271,7 @@ struct MainTabView: View {
                     )
                 }
                 .navigationDestination(isPresented: $showBookmarks) {
-                    BookmarksScreen(store: env.bookmarks)
+                    BookmarksScreen(store: BookmarksStore(network: env.network))
                 }
                 .navigationDestination(isPresented: $showLists) {
                     ListsScreen(
