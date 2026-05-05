@@ -35,9 +35,17 @@ struct Bluesky_SwiftUIApp: App {
                         .task { await boot() }
                 }
             }
-            // Route deep links to the existing window on macOS rather than spawning a new one.
+            // The View-level modifier marks the existing window instance as the
+            // preferred handler for incoming URLs/activities so macOS routes them
+            // here instead of creating a new window.
             .handlesExternalEvents(preferring: Set(arrayLiteral: "*"), allowing: Set(arrayLiteral: "*"))
         }
+        // The Scene-level modifier declares which external events this WindowGroup
+        // accepts. Without it, macOS treats every incoming URL as needing a fresh
+        // window because no existing scene has claimed the URL pattern. Both
+        // modifiers are required: Scene-level chooses the WindowGroup, View-level
+        // picks the existing window inside it.
+        .handlesExternalEvents(matching: Set(arrayLiteral: "*"))
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
