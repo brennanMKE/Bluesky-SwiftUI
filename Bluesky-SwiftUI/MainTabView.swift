@@ -70,6 +70,19 @@ struct MainTabView: View {
         selectedTab = .profile
     }
 
+    /// Clears per-tab navigation state when the user switches tabs so stale
+    /// destinations (thread, profile, settings, bookmarks, etc.) don't push
+    /// themselves back onto the freshly-recreated NavigationStack.
+    private func resetTransientNavState() {
+        threadURI = nil
+        feedProfileDID = nil
+        showSavedFeeds = false
+        showModeration = false
+        showSettings = false
+        showBookmarks = false
+        showLists = false
+    }
+
     // MARK: - macOS sidebar (NavigationSplitView)
 
     #if os(macOS)
@@ -110,10 +123,7 @@ struct MainTabView: View {
             // stack alive even though the root content has changed.
             .id(selectedTab ?? AppTab.home)
             .onChange(of: selectedTab) { _, _ in
-                // Clear per-tab navigation state so stale destinations
-                // (thread, profile) don't re-appear if the tab is revisited.
-                threadURI = nil
-                feedProfileDID = nil
+                resetTransientNavState()
             }
         }
         .background(theme.colors.background)
@@ -147,8 +157,7 @@ struct MainTabView: View {
                     // so pushed views don't linger in the detail pane.
                     .id(selectedTab ?? AppTab.home)
                     .onChange(of: selectedTab) { _, _ in
-                        threadURI = nil
-                        feedProfileDID = nil
+                        resetTransientNavState()
                     }
                 }
             } else {
