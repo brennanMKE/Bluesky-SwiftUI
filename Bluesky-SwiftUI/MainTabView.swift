@@ -251,6 +251,8 @@ struct MainTabView: View {
                         iosHomeTopBar
                     case .notifications:
                         iosNotificationsTopBar
+                    case .search:
+                        iosSearchTopBar
                     default:
                         EmptyView()
                     }
@@ -347,6 +349,44 @@ struct MainTabView: View {
                     accessibilityLabel: "Notification settings",
                     action: { showNotificationSettings = true }
                 )
+            }
+        )
+    }
+
+    /// Slim top bar shown on the iOS Search tab. Reuses the same shared
+    /// drawer state as Home and Notifications (the hamburger triggers
+    /// `showDrawer`), renders a single-line "Search" title in the centre,
+    /// and leaves the trailing slot empty — the RN reference's Search
+    /// shell (`src/screens/Search/Shell.tsx`) puts a `Layout.Header.Slot`
+    /// (an empty placeholder) on the trailing edge for the base Search
+    /// screen; the language-filter dropdown only appears on the
+    /// SearchResults sub-screen, not the discovery view this top bar
+    /// covers. The search field itself stays directly below this bar
+    /// inside `SearchScreen`.
+    private var iosSearchTopBar: some View {
+        BlueskyTopBar(
+            leading: {
+                BlueskyTopBarIconButton(
+                    systemImage: "line.3.horizontal",
+                    accessibilityLabel: "Open menu",
+                    action: { withAnimation(.easeOut(duration: 0.22)) { showDrawer = true } }
+                )
+            },
+            center: {
+                // Plain title (regular weight, primary text colour) — matches
+                // the Notifications top bar's per-screen title treatment.
+                // Sizing matches `BlueskyWordmark` so the visual weight of
+                // the bar is consistent across tabs.
+                Text("Search")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+            },
+            trailing: {
+                // RN's base Search screen has no trailing action — the
+                // search field below handles all the discovery affordances.
+                EmptyView()
             }
         )
     }
