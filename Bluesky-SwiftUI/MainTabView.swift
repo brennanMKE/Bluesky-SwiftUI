@@ -36,6 +36,10 @@ struct MainTabView: View {
     @State private var showSavedFeeds = false
     @State private var showLists = false
     @State private var offlineBannerState = OfflineBannerState()
+    /// Single shared `BookmarksStore` so the sidebar Saved tab and the
+    /// per-screen instance share state (avoids duplicate fetches whenever
+    /// the user re-enters the tab).
+    @State private var savedStore: BookmarksStore?
 
     var body: some View {
         #if os(macOS)
@@ -116,7 +120,7 @@ struct MainTabView: View {
     private var macOSSidebar: some View {
         NavigationSplitView {
             List(selection: $selectedTab) {
-                ForEach(AppTab.allCases) { tab in
+                ForEach(AppTab.sidebarTabs) { tab in
                     Label(tab.title, systemImage: tab.icon)
                         .badge(badge(for: tab))
                         .tag(tab)
@@ -169,7 +173,7 @@ struct MainTabView: View {
             if horizontalSizeClass == .regular {
                 NavigationSplitView {
                     List(selection: $selectedTab) {
-                        ForEach(AppTab.allCases) { tab in
+                        ForEach(AppTab.sidebarTabs) { tab in
                             Label(tab.title, systemImage: tab.icon)
                                 .badge(badge(for: tab))
                                 .tag(tab)
@@ -192,7 +196,7 @@ struct MainTabView: View {
                     get: { selectedTab ?? .home },
                     set: { selectedTab = $0 }
                 )) {
-                    ForEach(AppTab.allCases) { tab in
+                    ForEach(AppTab.compactTabs) { tab in
                         NavigationStack {
                             tabContent(tab)
                         }
@@ -272,6 +276,30 @@ struct MainTabView: View {
                 network: env.network,
                 onUnreadCountChange: { count in notificationBadge = count }
             )
+        case .saved:
+            BookmarksScreen(
+                store: savedStoreOrCreate(),
+                onPostTap: { post in threadURI = post.uri },
+                onAuthorTap: { profile in feedProfileDID = profile.did }
+            )
+            .navigationDestination(item: $threadURI) { uri in
+                ThreadView(
+                    uri: uri,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    bookmarks: env.bookmarks,
+                    onAuthorTap: { profile in feedProfileDID = profile.did },
+                    onPostTap: { post in threadURI = post.uri }
+                )
+            }
+            .navigationDestination(item: $feedProfileDID) { did in
+                ProfileScreen(
+                    actorDID: did,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    viewerDID: session.currentAccount?.did
+                )
+            }
         case .profile:
             if let account = session.currentAccount {
                 ProfileScreen(
@@ -284,7 +312,7 @@ struct MainTabView: View {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button("Settings", systemImage: "gear") { showSettings = true }
-                            Button("Bookmarks", systemImage: "bookmark") { showBookmarks = true }
+                            Button("Saved", systemImage: "bookmark") { showBookmarks = true }
                             Button("My Lists", systemImage: "list.bullet") { showLists = true }
                             Button("Moderation", systemImage: "shield") { showModeration = true }
                         } label: {
@@ -313,7 +341,11 @@ struct MainTabView: View {
                     )
                 }
                 .navigationDestination(isPresented: $showBookmarks) {
-                    BookmarksScreen(store: BookmarksStore(network: env.network))
+                    BookmarksScreen(
+                        store: savedStoreOrCreate(),
+                        onPostTap: { post in threadURI = post.uri },
+                        onAuthorTap: { profile in feedProfileDID = profile.did }
+                    )
                 }
                 .navigationDestination(isPresented: $showLists) {
                     ListsScreen(
@@ -326,6 +358,17 @@ struct MainTabView: View {
                 placeholderScreen("Profile", systemImage: "person.circle")
             }
         }
+    }
+
+    /// Lazily creates the shared `BookmarksStore` on first access. Reusing the
+    /// same instance across the sidebar Saved tab and any other entry point
+    /// (e.g. Profile menu) avoids re-fetching the bookmark list every time the
+    /// user navigates away and back.
+    private func savedStoreOrCreate() -> BookmarksStore {
+        if let existing = savedStore { return existing }
+        let store = BookmarksStore(network: env.network)
+        savedStore = store
+        return store
     }
 
     private func placeholderScreen(_ title: String, systemImage: String) -> some View {
@@ -371,9 +414,21 @@ struct MainTabView: View {
 // MARK: - AppTab
 
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
-    case home, search, messages, notifications, profile
+    case home, search, messages, notifications, saved, profile
 
     var id: String { rawValue }
+
+    /// Tabs shown in compact iPhone-style tab bars. The system caps useful tab
+    /// bars at five items, so `Saved` is hidden in compact and remains
+    /// accessible from the Profile menu (matching the bsky.app mobile drawer).
+    static var compactTabs: [AppTab] {
+        [.home, .search, .messages, .notifications, .profile]
+    }
+
+    /// Tabs shown in regular sidebar layouts (macOS, iPadOS regular width).
+    /// `Saved` sits alongside the other primary destinations to mirror the
+    /// bsky.app web LeftNav.
+    static var sidebarTabs: [AppTab] { allCases }
 
     var title: String {
         switch self {
@@ -381,6 +436,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         case .search:        "Search"
         case .messages:      "Messages"
         case .notifications: "Notifications"
+        case .saved:         "Saved"
         case .profile:       "Profile"
         }
     }
@@ -391,6 +447,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         case .search:        "magnifyingglass"
         case .messages:      "bubble.left.and.bubble.right"
         case .notifications: "bell"
+        case .saved:         "bookmark"
         case .profile:       "person.circle"
         }
     }
