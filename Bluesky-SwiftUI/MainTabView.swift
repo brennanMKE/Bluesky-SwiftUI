@@ -826,8 +826,16 @@ struct MainTabView: View {
                     actorDID: account.did,
                     network: env.network,
                     accountStore: env.accounts,
-                    viewerDID: account.did
+                    viewerDID: account.did,
+                    // #0083: on iOS the own-profile menu lives in the
+                    // banner-row ellipsis (with blue dot). macOS keeps the
+                    // toolbar Menu below.
+                    onSettings:   { showSettings = true },
+                    onSaved:      { showBookmarks = true },
+                    onMyLists:    { showLists = true },
+                    onModeration: { showModeration = true }
                 )
+                #if os(macOS)
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
@@ -840,6 +848,7 @@ struct MainTabView: View {
                         }
                     }
                 }
+                #endif
                 .navigationDestination(isPresented: $showModeration) {
                     ModerationScreen(network: env.network, accountStore: env.accounts)
                 }
