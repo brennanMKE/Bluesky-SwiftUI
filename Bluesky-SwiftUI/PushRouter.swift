@@ -12,6 +12,11 @@ extension Notification.Name {
     /// Posted when a push notification payload identifies a profile to open.
     /// `object` is the DID `String` of the target user.
     static let openProfile = Notification.Name("co.sstools.bluesky.openProfile")
+
+    /// Posted by `MainTabView` whenever the device's network path transitions
+    /// from not-viable to viable. Feature view models can observe this to
+    /// trigger a refresh when connectivity is restored. `object` is `nil`.
+    static let networkBecameViable = Notification.Name("co.sstools.bluesky.networkBecameViable")
 }
 
 // MARK: - PushNotificationDelegate

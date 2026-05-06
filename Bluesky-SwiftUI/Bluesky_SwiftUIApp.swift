@@ -56,7 +56,9 @@ struct Bluesky_SwiftUIApp: App {
 
     private func boot() async {
         let accounts = KeychainAccountStore()
-        let network = ATProtoClient(accountStore: accounts)
+        let pathMonitor = NWPathMonitorAdapter()
+        pathMonitor.start()
+        let network = ATProtoClient(accountStore: accounts, pathMonitor: pathMonitor)
         let sm = SessionManager(accountStore: accounts, network: network)
         let prefs = UserDefaultsPreferencesStore(suiteName: "group.co.sstools.bluesky")
         // Use App Group store when available (shared with extensions), otherwise fall
@@ -99,7 +101,8 @@ struct Bluesky_SwiftUIApp: App {
             preferences: prefs,
             network: network,
             cache: cache,
-            bookmarks: bookmarkStore
+            bookmarks: bookmarkStore,
+            pathMonitor: pathMonitor
         )
         await sm.restoreLastSession()
 

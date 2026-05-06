@@ -35,6 +35,7 @@ struct MainTabView: View {
     @State private var showBookmarks = false
     @State private var showSavedFeeds = false
     @State private var showLists = false
+    @State private var offlineBannerState = OfflineBannerState()
 
     var body: some View {
         #if os(macOS)
@@ -46,6 +47,10 @@ struct MainTabView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openProfile)) { note in
                 handlePushProfile(note)
             }
+            .overlay(alignment: .top) {
+                OfflineBanner(state: offlineBannerState)
+            }
+            .task { await observePathStatus() }
         #else
         adaptiveLayout
             .onOpenURL { handleDeepLink($0) }
@@ -55,7 +60,26 @@ struct MainTabView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openProfile)) { note in
                 handlePushProfile(note)
             }
+            .overlay(alignment: .top) {
+                OfflineBanner(state: offlineBannerState)
+            }
+            .task { await observePathStatus() }
         #endif
+    }
+
+    /// Subscribes to the shared `NetworkPathMonitoring` and mirrors viability into
+    /// `offlineBannerState` for the SwiftUI banner. Also broadcasts a notification
+    /// when connectivity is restored so feature view models can refresh.
+    private func observePathStatus() async {
+        // Seed initial state from the synchronous snapshot before awaiting the stream.
+        withAnimation { offlineBannerState.isOffline = !env.pathMonitor.isViable }
+        for await status in env.pathMonitor.statusStream {
+            let offline = (status != .viable)
+            withAnimation { offlineBannerState.isOffline = offline }
+            if status == .viable {
+                NotificationCenter.default.post(name: .networkBecameViable, object: nil)
+            }
+        }
     }
 
     // MARK: - Push notification routing
