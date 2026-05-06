@@ -49,9 +49,12 @@ struct MainTabView: View {
     @State private var viewerDisplayName: String?
     /// iOS-only: whether the slide-in drawer is currently visible.
     @State private var showDrawer = false
-    /// iOS-only: navigation flag to push the My Feeds placeholder destination
-    /// from the # button on the top bar.
+    /// iOS-only: navigation flag to push the My Feeds destination from the
+    /// `#` button on the top bar (#0073).
     @State private var showMyFeeds = false
+    /// iOS-only: AT-URI of a custom feed opened from the My Feeds screen,
+    /// used to push a `CustomFeedTimelineView` for that feed.
+    @State private var openCustomFeedURI: ATURI?
 
     var body: some View {
         #if os(macOS)
@@ -125,6 +128,7 @@ struct MainTabView: View {
         showBookmarks = false
         showLists = false
         showMyFeeds = false
+        openCustomFeedURI = nil
     }
 
     // MARK: - macOS sidebar (NavigationSplitView)
@@ -660,10 +664,38 @@ struct MainTabView: View {
                 SavedFeedsScreen(network: env.network, cache: env.cache)
             }
             #if os(iOS)
-            // Placeholder destination wired to the Home top bar's `#` button
-            // (#0072). The real My Feeds screen is tracked under #0073.
+            // Destination for the Home top bar's `#` button (#0072 / #0073).
+            // The screen lets the user manage their pinned/saved feeds, search
+            // for new ones, and discover curated suggestions.
             .navigationDestination(isPresented: $showMyFeeds) {
-                MyFeedsPlaceholderView()
+                MyFeedsScreen(
+                    network: env.network,
+                    cache: env.cache,
+                    onFeedTap: { saved, resolved in
+                        // "following" maps back to the timeline — close the
+                        // My Feeds screen and let the user fall through to
+                        // the existing Home feed.
+                        if saved.type == "timeline" {
+                            showMyFeeds = false
+                            return
+                        }
+                        openCustomFeedURI = ATURI(rawValue: saved.value)
+                    },
+                    onSuggestedTap: { feed in
+                        openCustomFeedURI = feed.uri
+                    }
+                )
+            }
+            .navigationDestination(item: $openCustomFeedURI) { uri in
+                CustomFeedTimelineView(
+                    feedURI: uri,
+                    title: uri.rkey ?? "Feed",
+                    network: env.network,
+                    accountStore: env.accounts,
+                    cache: env.cache,
+                    onPostTap: { post in threadURI = post.uri },
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
             }
             #endif
             // The composer sheet is attached at the layout root on iOS
@@ -871,31 +903,3 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-#if os(iOS)
-// MARK: - MyFeedsPlaceholderView
-
-/// Placeholder destination for the iOS Home top bar's `#` button.
-/// The full My Feeds screen is tracked under #0073; until that lands, the
-/// `#` button surfaces this view rather than silently no-op'ing.
-private struct MyFeedsPlaceholderView: View {
-    @Environment(\.blueskyTheme) private var theme
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "number")
-                .font(.system(size: 48))
-                .foregroundStyle(theme.colors.textSecondary)
-            Text("My Feeds")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(theme.colors.textPrimary)
-            Text("Coming soon")
-                .font(.subheadline)
-                .foregroundStyle(theme.colors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.colors.background.ignoresSafeArea())
-        .navigationTitle("My Feeds")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-#endif
