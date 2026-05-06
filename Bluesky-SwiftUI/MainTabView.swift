@@ -230,23 +230,31 @@ struct MainTabView: View {
     private var iosCompactLayout: some View {
         let activeTab = selectedTab ?? .home
         return NavigationStack {
-            VStack(spacing: 0) {
-                // Slim top bar on tabs that have adopted the RN parity
-                // chrome. Home (#0072) and Notifications (#0077) both
-                // mount a `BlueskyTopBar` here to share the drawer and
-                // suppress the giant system headline. Other tabs (Search,
-                // Profile, Messages) still draw their own chrome — see
-                // their dedicated parity issues.
-                switch activeTab {
-                case .home:
-                    iosHomeTopBar
-                case .notifications:
-                    iosNotificationsTopBar
-                default:
-                    EmptyView()
+            // Fix #0088: mount the slim top bar via `.safeAreaInset(edge: .top)`
+            // rather than as the first child of a `VStack` that respects the
+            // top safe area. The bar's *background* ignores the top safe area
+            // (see `BlueskyTopBar`) so it bleeds behind the status bar while
+            // its *content* stays inside the safe area. Profile owns its own
+            // banner-bleed (see `ProfileScreen`'s `.ignoresSafeArea(.top)`),
+            // so its inset slot resolves to `EmptyView` and the screen
+            // handles the status-bar zone itself.
+            tabContent(activeTab)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    // Slim top bar on tabs that have adopted the RN parity
+                    // chrome. Home (#0072) and Notifications (#0077) both
+                    // mount a `BlueskyTopBar` here to share the drawer and
+                    // suppress the giant system headline. Other tabs
+                    // (Search, Profile, Messages) still draw their own
+                    // chrome — see their dedicated parity issues.
+                    switch activeTab {
+                    case .home:
+                        iosHomeTopBar
+                    case .notifications:
+                        iosNotificationsTopBar
+                    default:
+                        EmptyView()
+                    }
                 }
-                tabContent(activeTab)
-            }
         }
         // Re-create the navigation stack when the active tab changes so
         // pushed destinations (thread, profile, settings, etc.) belonging
