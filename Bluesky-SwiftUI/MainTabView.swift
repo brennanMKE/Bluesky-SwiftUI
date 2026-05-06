@@ -55,6 +55,11 @@ struct MainTabView: View {
     /// iOS-only: AT-URI of a custom feed opened from the My Feeds screen,
     /// used to push a `CustomFeedTimelineView` for that feed.
     @State private var openCustomFeedURI: ATURI?
+    /// iOS-only: navigation flag to push a notification-settings placeholder
+    /// from the gear button on the Notifications top bar (#0077). The real
+    /// destination — a public entry point into `BlueskySettings`'
+    /// `NotificationSettingsScreen` — is tracked as a follow-up.
+    @State private var showNotificationSettings = false
 
     var body: some View {
         #if os(macOS)
@@ -129,6 +134,7 @@ struct MainTabView: View {
         showLists = false
         showMyFeeds = false
         openCustomFeedURI = nil
+        showNotificationSettings = false
     }
 
     // MARK: - macOS sidebar (NavigationSplitView)
@@ -225,13 +231,19 @@ struct MainTabView: View {
         let activeTab = selectedTab ?? .home
         return NavigationStack {
             VStack(spacing: 0) {
-                // Slim top bar on Home only — other tabs draw their own
-                // chrome (Search, Notifications, Profile, Messages have
-                // dedicated parity issues #0069 / #0070 / etc). Wiring the
-                // bar here keeps it pinned and prevents the giant "Home"
-                // headline that the system nav bar would otherwise show.
-                if activeTab == .home {
+                // Slim top bar on tabs that have adopted the RN parity
+                // chrome. Home (#0072) and Notifications (#0077) both
+                // mount a `BlueskyTopBar` here to share the drawer and
+                // suppress the giant system headline. Other tabs (Search,
+                // Profile, Messages) still draw their own chrome — see
+                // their dedicated parity issues.
+                switch activeTab {
+                case .home:
                     iosHomeTopBar
+                case .notifications:
+                    iosNotificationsTopBar
+                default:
+                    EmptyView()
                 }
                 tabContent(activeTab)
             }
@@ -290,6 +302,42 @@ struct MainTabView: View {
                     systemImage: "number",
                     accessibilityLabel: "My feeds",
                     action: { showMyFeeds = true }
+                )
+            }
+        )
+    }
+
+    /// Slim top bar shown on the iOS Notifications tab. Reuses the same
+    /// shared drawer state as Home (the hamburger triggers `showDrawer`),
+    /// renders a single-line "Notifications" title in the centre, and a
+    /// gear button on the trailing edge that pushes a placeholder
+    /// notification-settings destination — see #0077 for the follow-up to
+    /// route into `BlueskySettings.NotificationSettingsScreen` directly.
+    private var iosNotificationsTopBar: some View {
+        BlueskyTopBar(
+            leading: {
+                BlueskyTopBarIconButton(
+                    systemImage: "line.3.horizontal",
+                    accessibilityLabel: "Open menu",
+                    action: { withAnimation(.easeOut(duration: 0.22)) { showDrawer = true } }
+                )
+            },
+            center: {
+                // Plain title (regular weight, primary text colour) — the
+                // brand-blue heavy `BlueskyWordmark` is reserved for Home.
+                // Sizing matches the wordmark so the visual weight of the
+                // bar is consistent across tabs.
+                Text("Notifications")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+            },
+            trailing: {
+                BlueskyTopBarIconButton(
+                    systemImage: "gearshape",
+                    accessibilityLabel: "Notification settings",
+                    action: { showNotificationSettings = true }
                 )
             }
         )
@@ -726,6 +774,15 @@ struct MainTabView: View {
                 network: env.network,
                 onUnreadCountChange: { count in notificationBadge = count }
             )
+            #if os(iOS)
+            // Destination for the gear button on the iOS Notifications top
+            // bar (#0077). Routes to a placeholder until the existing
+            // internal `NotificationSettingsScreen` in BlueskySettings is
+            // exposed publicly — tracked as a follow-up.
+            .navigationDestination(isPresented: $showNotificationSettings) {
+                placeholderScreen("Notification Settings", systemImage: "bell.badge")
+            }
+            #endif
         case .saved:
             BookmarksScreen(
                 store: savedStoreOrCreate(),
