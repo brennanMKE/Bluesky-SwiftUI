@@ -45,6 +45,13 @@ struct MainTabView: View {
     /// account changes; falls back to a placeholder while loading or when
     /// the network call fails.
     @State private var viewerAvatarURL: URL?
+    /// Display name for the signed-in viewer, used by the iOS drawer profile card.
+    @State private var viewerDisplayName: String?
+    /// iOS-only: whether the slide-in drawer is currently visible.
+    @State private var showDrawer = false
+    /// iOS-only: navigation flag to push the My Feeds placeholder destination
+    /// from the # button on the top bar.
+    @State private var showMyFeeds = false
 
     var body: some View {
         #if os(macOS)
@@ -117,6 +124,7 @@ struct MainTabView: View {
         showSettings = false
         showBookmarks = false
         showLists = false
+        showMyFeeds = false
     }
 
     // MARK: - macOS sidebar (NavigationSplitView)
@@ -212,7 +220,17 @@ struct MainTabView: View {
     private var iosCompactLayout: some View {
         let activeTab = selectedTab ?? .home
         return NavigationStack {
-            tabContent(activeTab)
+            VStack(spacing: 0) {
+                // Slim top bar on Home only — other tabs draw their own
+                // chrome (Search, Notifications, Profile, Messages have
+                // dedicated parity issues #0069 / #0070 / etc). Wiring the
+                // bar here keeps it pinned and prevents the giant "Home"
+                // headline that the system nav bar would otherwise show.
+                if activeTab == .home {
+                    iosHomeTopBar
+                }
+                tabContent(activeTab)
+            }
         }
         // Re-create the navigation stack when the active tab changes so
         // pushed destinations (thread, profile, settings, etc.) belonging
@@ -228,7 +246,7 @@ struct MainTabView: View {
         // keeps the FAB visually 16pt above the bar without manual
         // height math.
         .overlay(alignment: .bottomTrailing) {
-            if activeTab != .messages {
+            if activeTab != .messages && !showDrawer {
                 composeFAB
                     .padding(.trailing, 16)
                     .padding(.bottom, 16)
@@ -237,12 +255,40 @@ struct MainTabView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             iosCustomTabBar(activeTab: activeTab)
         }
+        // Drawer overlay sits above tab content + bottom bar so the slide-in
+        // panel can cover the full screen including the safe-area inset.
+        .overlay(alignment: .leading) {
+            iosDrawerOverlay
+        }
         .task(id: session.currentAccount?.did) {
             await refreshViewerAvatar()
         }
         .sheet(isPresented: $showComposer) {
             ComposerSheet(network: env.network, accountStore: env.accounts)
         }
+    }
+
+    /// Slim top bar shown on the iOS Home tab. Hosts the hamburger drawer
+    /// trigger on the leading edge, the Bluesky wordmark in the centre, and
+    /// the My Feeds (`#`) shortcut on the trailing edge — matching the RN
+    /// reference layout for #0072.
+    private var iosHomeTopBar: some View {
+        BlueskyTopBar(
+            leading: {
+                BlueskyTopBarIconButton(
+                    systemImage: "line.3.horizontal",
+                    accessibilityLabel: "Open menu",
+                    action: { withAnimation(.easeOut(duration: 0.22)) { showDrawer = true } }
+                )
+            },
+            trailing: {
+                BlueskyTopBarIconButton(
+                    systemImage: "number",
+                    accessibilityLabel: "My feeds",
+                    action: { showMyFeeds = true }
+                )
+            }
+        )
     }
 
     /// Custom icon-only tab bar shown on iOS compact widths.
@@ -348,12 +394,175 @@ struct MainTabView: View {
         .accessibilityLabel("New post")
     }
 
+    // MARK: - iOS drawer
+
+    /// Slide-in left drawer shown on iPhone. Mirrors the RN reference's
+    /// shell drawer: profile card on top, navigation rows for the major
+    /// destinations, sign-out at the bottom. Implemented as a hand-rolled
+    /// `ZStack` overlay (rather than a system sheet) so the slide animation
+    /// and dim-scrim match the React Native parity target.
+    @ViewBuilder
+    private var iosDrawerOverlay: some View {
+        if showDrawer {
+            ZStack(alignment: .leading) {
+                // Tap-anywhere-to-dismiss scrim.
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.22)) { showDrawer = false }
+                    }
+                    .transition(.opacity)
+                drawerPanel
+                    .transition(.move(edge: .leading))
+            }
+            .zIndex(10)
+        }
+    }
+
+    /// The opaque drawer panel itself. Profile card at top, nav rows in the
+    /// middle, sign-out at the bottom. Width is ~80% of the screen — matches
+    /// the RN drawer width.
+    private var drawerPanel: some View {
+        let panelWidth = min(UIScreen.main.bounds.width * 0.82, 340)
+        return VStack(spacing: 0) {
+            drawerProfileCard
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    drawerRow("Profile", systemImage: "person.circle") {
+                        dismissDrawer()
+                        selectedTab = .profile
+                    }
+                    drawerRow("Search", systemImage: "magnifyingglass") {
+                        dismissDrawer()
+                        selectedTab = .search
+                    }
+                    drawerRow("Feeds", systemImage: "number") {
+                        dismissDrawer()
+                        selectedTab = .home
+                        // Push the My Feeds destination after the drawer
+                        // has had time to dismiss so the navigation animation
+                        // doesn't fight the drawer slide-out.
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 220_000_000)
+                            showMyFeeds = true
+                        }
+                    }
+                    drawerRow("Lists", systemImage: "list.bullet") {
+                        dismissDrawer()
+                        selectedTab = .profile
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 220_000_000)
+                            showLists = true
+                        }
+                    }
+                    drawerRow("Bookmarks", systemImage: "bookmark") {
+                        dismissDrawer()
+                        selectedTab = .profile
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 220_000_000)
+                            showBookmarks = true
+                        }
+                    }
+                    drawerRow("Settings", systemImage: "gearshape") {
+                        dismissDrawer()
+                        selectedTab = .profile
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 220_000_000)
+                            showSettings = true
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            Divider()
+            drawerRow("Sign out", systemImage: "rectangle.portrait.and.arrow.right", isDestructive: true) {
+                dismissDrawer()
+                if let did = session.currentAccount?.did {
+                    Task {
+                        do {
+                            try await session.logout(did: did)
+                        } catch {
+                            mainTabViewLogger.error("logout failed: \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
+                }
+            }
+            .padding(.bottom, 24)
+        }
+        .frame(width: panelWidth, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(theme.colors.background)
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    private var drawerProfileCard: some View {
+        let account = session.currentAccount
+        let handle = account?.handle.rawValue ?? ""
+        let displayName = viewerDisplayName ?? account?.displayName ?? handle
+        return HStack(spacing: 12) {
+            AvatarView(
+                url: viewerAvatarURL,
+                handle: handle.isEmpty ? "?" : handle,
+                size: 52
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayName)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
+                if !handle.isEmpty {
+                    Text("@\(handle)")
+                        .font(.system(size: 14))
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func drawerRow(
+        _ title: String,
+        systemImage: String,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(isDestructive ? theme.colors.error : theme.colors.textPrimary)
+                    .frame(width: 28, height: 28, alignment: .center)
+                Text(title)
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(isDestructive ? theme.colors.error : theme.colors.textPrimary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+
+    private func dismissDrawer() {
+        withAnimation(.easeOut(duration: 0.22)) { showDrawer = false }
+    }
+
     /// Hydrates `viewerAvatarURL` from the AT Protocol `getProfile`
     /// endpoint. Failures are swallowed silently — the avatar simply
     /// falls back to the initials placeholder rendered by `AvatarView`.
     private func refreshViewerAvatar() async {
         guard let did = session.currentAccount?.did else {
             viewerAvatarURL = nil
+            viewerDisplayName = nil
             return
         }
         do {
@@ -362,6 +571,7 @@ struct MainTabView: View {
                 params: ["actor": did.rawValue]
             )
             viewerAvatarURL = profile.avatar
+            viewerDisplayName = profile.displayName
         } catch {
             mainTabViewLogger.debug("viewer avatar fetch failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -424,6 +634,19 @@ struct MainTabView: View {
                     }
                 }
                 #endif
+                #if os(iOS)
+                // The Saved Feeds shortcut moves into the iPhone drawer (#0072);
+                // keep it as a toolbar item only at iPad regular width.
+                if horizontalSizeClass == .regular {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showSavedFeeds = true
+                        } label: {
+                            Image(systemName: "list.star")
+                        }
+                    }
+                }
+                #else
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showSavedFeeds = true
@@ -431,10 +654,18 @@ struct MainTabView: View {
                         Image(systemName: "list.star")
                     }
                 }
+                #endif
             }
             .navigationDestination(isPresented: $showSavedFeeds) {
                 SavedFeedsScreen(network: env.network, cache: env.cache)
             }
+            #if os(iOS)
+            // Placeholder destination wired to the Home top bar's `#` button
+            // (#0072). The real My Feeds screen is tracked under #0073.
+            .navigationDestination(isPresented: $showMyFeeds) {
+                MyFeedsPlaceholderView()
+            }
+            #endif
             // The composer sheet is attached at the layout root on iOS
             // compact (so the floating FAB can drive it from outside any
             // tab); on macOS and iPad regular the per-tab toolbar compose
@@ -639,3 +870,32 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         }
     }
 }
+
+#if os(iOS)
+// MARK: - MyFeedsPlaceholderView
+
+/// Placeholder destination for the iOS Home top bar's `#` button.
+/// The full My Feeds screen is tracked under #0073; until that lands, the
+/// `#` button surfaces this view rather than silently no-op'ing.
+private struct MyFeedsPlaceholderView: View {
+    @Environment(\.blueskyTheme) private var theme
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "number")
+                .font(.system(size: 48))
+                .foregroundStyle(theme.colors.textSecondary)
+            Text("My Feeds")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(theme.colors.textPrimary)
+            Text("Coming soon")
+                .font(.subheadline)
+                .foregroundStyle(theme.colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.colors.background.ignoresSafeArea())
+        .navigationTitle("My Feeds")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+#endif
