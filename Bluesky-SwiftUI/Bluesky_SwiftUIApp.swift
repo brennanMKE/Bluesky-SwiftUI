@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 import UserNotifications
 import BlueskyAuth
 import BlueskyDataStore
@@ -6,6 +7,8 @@ import BlueskyFeed
 import BlueskyNetworking
 import BlueskyKit
 import BlueskyUI
+
+private let bootLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "co.sstools.Bluesky", category: "Boot")
 
 @main
 struct Bluesky_SwiftUIApp: App {
@@ -61,11 +64,22 @@ struct Bluesky_SwiftUIApp: App {
         // write to disk the problem must be diagnosed and fixed, not silently hidden.
         let cache: any CacheStore
         do {
-            if let appGroupCache = try? SwiftDataCacheStore(appGroupIdentifier: "group.co.sstools.bluesky") {
-                print("[Boot] cache: App Group store")
+            // App Group store is preferred (shared with extensions). If it fails
+            // (e.g. App Group entitlement missing or container not provisioned),
+            // log the underlying error and fall back to a local store. The outer
+            // catch still handles a total failure of both stores.
+            let appGroupCache: SwiftDataCacheStore?
+            do {
+                appGroupCache = try SwiftDataCacheStore(appGroupIdentifier: "group.co.sstools.bluesky")
+            } catch {
+                bootLogger.debug("App Group cache unavailable, falling back to local store: \(error.localizedDescription, privacy: .public)")
+                appGroupCache = nil
+            }
+            if let appGroupCache {
+                bootLogger.info("cache: App Group store")
                 cache = appGroupCache
             } else {
-                print("[Boot] cache: local persistent store")
+                bootLogger.info("cache: local persistent store")
                 cache = try SwiftDataCacheStore()
             }
         } catch {

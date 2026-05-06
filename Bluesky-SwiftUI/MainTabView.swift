@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 import UserNotifications
 import BlueskyAuth
 import BlueskyCore
@@ -13,6 +14,8 @@ import BlueskyModeration
 import BlueskySettings
 import BlueskyLists
 import BlueskyUI
+
+private let mainTabViewLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "co.sstools.Bluesky", category: "MainTabView")
 
 struct MainTabView: View {
     @Environment(SessionManager.self) private var session
@@ -275,7 +278,13 @@ struct MainTabView: View {
                         network: env.network,
                         onModerationTap: { showModeration = true },
                         onSignOut: {
-                            Task { try? await session.logout(did: account.did) }
+                            Task {
+                                do {
+                                    try await session.logout(did: account.did)
+                                } catch {
+                                    mainTabViewLogger.error("logout failed: \(error.localizedDescription, privacy: .public)")
+                                }
+                            }
                         }
                     )
                 }
