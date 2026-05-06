@@ -772,8 +772,21 @@ struct MainTabView: View {
         case .notifications:
             NotificationsScreen(
                 network: env.network,
-                onUnreadCountChange: { count in notificationBadge = count }
+                onUnreadCountChange: { count in notificationBadge = count },
+                onAuthorTap: { profile in feedProfileDID = profile.did }
             )
+            // Destination for actor-avatar / expanded-actor taps on the
+            // notifications list (#0080). Same shared `feedProfileDID`
+            // state used by Home / Saved / Search so back-navigation
+            // behaves consistently.
+            .navigationDestination(item: $feedProfileDID) { did in
+                ProfileScreen(
+                    actorDID: did,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    viewerDID: session.currentAccount?.did
+                )
+            }
             #if os(iOS)
             // Destination for the gear button on the iOS Notifications top
             // bar (#0077). Routes to a placeholder until the existing
