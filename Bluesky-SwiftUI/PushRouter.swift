@@ -17,6 +17,11 @@ extension Notification.Name {
     /// from not-viable to viable. Feature view models can observe this to
     /// trigger a refresh when connectivity is restored. `object` is `nil`.
     static let networkBecameViable = Notification.Name("co.sstools.bluesky.networkBecameViable")
+
+    /// Posted when the user taps the active Home tab on the iOS custom tab
+    /// bar (RN parity for "tap-to-scroll-to-top"). `FeedView` listens for
+    /// this and scrolls its feed back to the first post. `object` is `nil`.
+    static let scrollFeedToTop = Notification.Name("co.sstools.bluesky.scrollFeedToTop")
 }
 
 // MARK: - PushNotificationDelegate
