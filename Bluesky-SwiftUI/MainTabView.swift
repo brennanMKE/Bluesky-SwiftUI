@@ -47,6 +47,14 @@ struct MainTabView: View {
     @State private var viewerAvatarURL: URL?
     /// Display name for the signed-in viewer, used by the iOS drawer profile card.
     @State private var viewerDisplayName: String?
+    /// Followers count for the signed-in viewer. Used by the drawer profile
+    /// header's stats row (#0150). `nil` until the first `getProfile` call
+    /// completes — the row hides itself in that state rather than flashing
+    /// zeros.
+    @State private var viewerFollowersCount: Int?
+    /// Following count for the signed-in viewer. Same lifecycle as
+    /// `viewerFollowersCount`.
+    @State private var viewerFollowingCount: Int?
     /// iOS-only: whether the slide-in drawer is currently visible.
     @State private var showDrawer = false
     /// iOS-only: navigation flag to push the My Feeds destination from the
@@ -504,11 +512,16 @@ struct MainTabView: View {
 
     // MARK: - iOS drawer
 
-    /// Slide-in left drawer shown on iPhone. Mirrors the RN reference's
-    /// shell drawer: profile card on top, navigation rows for the major
-    /// destinations, sign-out at the bottom. Implemented as a hand-rolled
-    /// `ZStack` overlay (rather than a system sheet) so the slide animation
-    /// and dim-scrim match the React Native parity target.
+    /// Slide-in left drawer shown on iPhone. Mirrors RN's
+    /// `Bluesky-ReactNative/src/view/shell/Drawer.tsx`: profile header at
+    /// the top with avatar / name / handle / followers · following stats,
+    /// nine navigation rows in RN order (Explore, Home, Chat,
+    /// Notifications, Feeds, Lists, Saved, Profile, Settings), and a footer
+    /// with Terms of Service / Privacy Policy links plus Feedback / Help
+    /// pill buttons. Implemented as a hand-rolled `ZStack` overlay (rather
+    /// than a system sheet) so the slide animation and dim-scrim match the
+    /// React Native parity target. The panel itself lives in `DrawerView`
+    /// (#0150) so the body of `MainTabView` doesn't balloon.
     @ViewBuilder
     private var iosDrawerOverlay: some View {
         if showDrawer {
@@ -516,161 +529,50 @@ struct MainTabView: View {
                 // Tap-anywhere-to-dismiss scrim.
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.22)) { showDrawer = false }
-                    }
+                    .onTapGesture { dismissDrawer() }
                     .transition(.opacity)
-                drawerPanel
-                    .transition(.move(edge: .leading))
+                DrawerView(
+                    selectedTab: $selectedTab,
+                    currentAccount: session.currentAccount,
+                    viewerAvatarURL: viewerAvatarURL,
+                    viewerDisplayName: viewerDisplayName,
+                    viewerFollowersCount: viewerFollowersCount,
+                    viewerFollowingCount: viewerFollowingCount,
+                    notificationBadge: notificationBadge,
+                    onAppearOnce: {
+                        // Refresh stats when the drawer first opens so the
+                        // followers/following row is populated even if the
+                        // initial `task(id:)` fired before the drawer was
+                        // ever visible.
+                        Task { await refreshViewerAvatar() }
+                    },
+                    onDismiss: { dismissDrawer() },
+                    onPushMyFeeds:   { showMyFeeds = true },
+                    onPushLists:     { showLists = true },
+                    onPushBookmarks: { showBookmarks = true },
+                    onPushSettings:  { showSettings = true }
+                )
+                .transition(.move(edge: .leading))
             }
             .zIndex(10)
         }
-    }
-
-    /// The opaque drawer panel itself. Profile card at top, nav rows in the
-    /// middle, sign-out at the bottom. Width is ~80% of the screen — matches
-    /// the RN drawer width.
-    private var drawerPanel: some View {
-        let panelWidth = min(UIScreen.main.bounds.width * 0.82, 340)
-        return VStack(spacing: 0) {
-            drawerProfileCard
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 16)
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    drawerRow("Profile", systemImage: "person.circle") {
-                        dismissDrawer()
-                        selectedTab = .profile
-                    }
-                    drawerRow("Search", systemImage: "magnifyingglass") {
-                        dismissDrawer()
-                        selectedTab = .search
-                    }
-                    drawerRow("Feeds", systemImage: "number") {
-                        dismissDrawer()
-                        selectedTab = .home
-                        // Push the My Feeds destination after the drawer
-                        // has had time to dismiss so the navigation animation
-                        // doesn't fight the drawer slide-out.
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 220_000_000)
-                            showMyFeeds = true
-                        }
-                    }
-                    drawerRow("Lists", systemImage: "list.bullet") {
-                        dismissDrawer()
-                        selectedTab = .profile
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 220_000_000)
-                            showLists = true
-                        }
-                    }
-                    drawerRow("Bookmarks", systemImage: "bookmark") {
-                        dismissDrawer()
-                        selectedTab = .profile
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 220_000_000)
-                            showBookmarks = true
-                        }
-                    }
-                    drawerRow("Settings", systemImage: "gearshape") {
-                        dismissDrawer()
-                        selectedTab = .profile
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 220_000_000)
-                            showSettings = true
-                        }
-                    }
-                }
-                .padding(.vertical, 8)
-            }
-            Divider()
-            drawerRow("Sign out", systemImage: "rectangle.portrait.and.arrow.right", isDestructive: true) {
-                dismissDrawer()
-                if let did = session.currentAccount?.did {
-                    Task {
-                        do {
-                            try await session.logout(did: did)
-                        } catch {
-                            mainTabViewLogger.error("logout failed: \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
-            }
-            .padding(.bottom, 24)
-        }
-        .frame(width: panelWidth, alignment: .leading)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(theme.colors.background)
-        .ignoresSafeArea(edges: .bottom)
-    }
-
-    private var drawerProfileCard: some View {
-        let account = session.currentAccount
-        let handle = account?.handle.rawValue ?? ""
-        let displayName = viewerDisplayName ?? account?.displayName ?? handle
-        return HStack(spacing: 12) {
-            AvatarView(
-                url: viewerAvatarURL,
-                handle: handle.isEmpty ? "?" : handle,
-                size: 52
-            )
-            VStack(alignment: .leading, spacing: 2) {
-                Text(displayName)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(theme.colors.textPrimary)
-                    .lineLimit(1)
-                if !handle.isEmpty {
-                    Text("@\(handle)")
-                        .font(.system(size: 14))
-                        .foregroundStyle(theme.colors.textSecondary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func drawerRow(
-        _ title: String,
-        systemImage: String,
-        isDestructive: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(isDestructive ? theme.colors.error : theme.colors.textPrimary)
-                    .frame(width: 28, height: 28, alignment: .center)
-                Text(title)
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(isDestructive ? theme.colors.error : theme.colors.textPrimary)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
     }
 
     private func dismissDrawer() {
         withAnimation(.easeOut(duration: 0.22)) { showDrawer = false }
     }
 
-    /// Hydrates `viewerAvatarURL` from the AT Protocol `getProfile`
-    /// endpoint. Failures are swallowed silently — the avatar simply
-    /// falls back to the initials placeholder rendered by `AvatarView`.
+    /// Hydrates `viewerAvatarURL`, `viewerDisplayName`, and the followers /
+    /// following counts shown in the iOS sidebar drawer header (#0150) from
+    /// the AT Protocol `getProfile` endpoint. Failures are swallowed
+    /// silently — the avatar falls back to the `AvatarView` initials
+    /// placeholder and the stats row hides itself.
     private func refreshViewerAvatar() async {
         guard let did = session.currentAccount?.did else {
             viewerAvatarURL = nil
             viewerDisplayName = nil
+            viewerFollowersCount = nil
+            viewerFollowingCount = nil
             return
         }
         do {
@@ -680,6 +582,8 @@ struct MainTabView: View {
             )
             viewerAvatarURL = profile.avatar
             viewerDisplayName = profile.displayName
+            viewerFollowersCount = profile.followersCount
+            viewerFollowingCount = profile.followsCount
         } catch {
             mainTabViewLogger.debug("viewer avatar fetch failed: \(error.localizedDescription, privacy: .public)")
         }
