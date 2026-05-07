@@ -61,6 +61,14 @@ struct MainTabView: View {
     /// `NotificationSettingsScreen` — is tracked as a follow-up.
     @State private var showNotificationSettings = false
 
+    /// AT-URI of the post whose `LikedByScreen` should push, fired by the
+    /// focal-post stat row in `ThreadView` (#0146 + #0139).
+    @State private var likedByPostURI: ATURI?
+    /// AT-URI of the post whose `RepostedByScreen` should push.
+    @State private var repostedByPostURI: ATURI?
+    /// AT-URI of the post whose `QuotesOfScreen` should push.
+    @State private var quotesPostURI: ATURI?
+
     var body: some View {
         #if os(macOS)
         macOSSidebar
@@ -699,7 +707,10 @@ struct MainTabView: View {
                     accountStore: env.accounts,
                     bookmarks: env.bookmarks,
                     onAuthorTap: { profile in feedProfileDID = profile.did },
-                    onPostTap: { post in threadURI = post.uri }
+                    onPostTap: { post in threadURI = post.uri },
+                    onLikedByTap: { postURI in likedByPostURI = postURI },
+                    onRepostedByTap: { postURI in repostedByPostURI = postURI },
+                    onQuotesTap: { postURI in quotesPostURI = postURI }
                 )
             }
             .navigationDestination(item: $feedProfileDID) { did in
@@ -708,6 +719,28 @@ struct MainTabView: View {
                     network: env.network,
                     accountStore: env.accounts,
                     viewerDID: session.currentAccount?.did
+                )
+            }
+            .navigationDestination(item: $likedByPostURI) { postURI in
+                LikedByScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $repostedByPostURI) { postURI in
+                RepostedByScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $quotesPostURI) { postURI in
+                QuotesOfScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onPostTap: { post in threadURI = post.uri },
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
                 )
             }
             .toolbar {
@@ -857,7 +890,10 @@ struct MainTabView: View {
                     accountStore: env.accounts,
                     bookmarks: env.bookmarks,
                     onAuthorTap: { profile in feedProfileDID = profile.did },
-                    onPostTap: { post in threadURI = post.uri }
+                    onPostTap: { post in threadURI = post.uri },
+                    onLikedByTap: { postURI in likedByPostURI = postURI },
+                    onRepostedByTap: { postURI in repostedByPostURI = postURI },
+                    onQuotesTap: { postURI in quotesPostURI = postURI }
                 )
             }
             .navigationDestination(item: $feedProfileDID) { did in
@@ -866,6 +902,28 @@ struct MainTabView: View {
                     network: env.network,
                     accountStore: env.accounts,
                     viewerDID: session.currentAccount?.did
+                )
+            }
+            .navigationDestination(item: $likedByPostURI) { postURI in
+                LikedByScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $repostedByPostURI) { postURI in
+                RepostedByScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $quotesPostURI) { postURI in
+                QuotesOfScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onPostTap: { post in threadURI = post.uri },
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
                 )
             }
         case .profile:
