@@ -55,6 +55,20 @@ struct RootView: View {
                         // ran; if not, force a re-route by clearing it.
                     }
                 )
+            } else if session.currentAccount?.status == .takendown
+                        || session.currentAccount?.status == .suspended {
+                // RN parity: takendown / suspended accounts also can't enter
+                // MainTabView — most API calls fail. Mirror the RN
+                // `screens/Takendown.tsx` flow (single screen for both
+                // statuses) with policy summary, ToS link, in-app appeal
+                // form, and a sign-out affordance. Issue #0095.
+                TakendownView(
+                    session: session,
+                    onSignedOut: {
+                        // SessionManager cleared `currentAccount`; the gate
+                        // falls back to LoginView.
+                    }
+                )
             } else if !hasOnboarded {
                 OnboardingFlowView(
                     session: session,
