@@ -290,7 +290,7 @@ struct MainTabView: View {
             await refreshViewerAvatar()
         }
         .sheet(isPresented: $showComposer) {
-            ComposerSheet(network: env.network, accountStore: env.accounts)
+            ComposerSheet(network: env.network, accountStore: env.accounts, preferences: env.preferences)
         }
     }
 
@@ -800,14 +800,14 @@ struct MainTabView: View {
             // button presents from this binding.
             #if os(macOS)
             .sheet(isPresented: $showComposer) {
-                ComposerSheet(network: env.network, accountStore: env.accounts)
+                ComposerSheet(network: env.network, accountStore: env.accounts, preferences: env.preferences)
             }
             #else
             .sheet(isPresented: Binding(
                 get: { showComposer && horizontalSizeClass == .regular },
                 set: { if !$0 { showComposer = false } }
             )) {
-                ComposerSheet(network: env.network, accountStore: env.accounts)
+                ComposerSheet(network: env.network, accountStore: env.accounts, preferences: env.preferences)
             }
             #endif
         case .search:
