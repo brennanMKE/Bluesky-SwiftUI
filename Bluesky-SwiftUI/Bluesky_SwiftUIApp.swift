@@ -19,6 +19,11 @@ struct Bluesky_SwiftUIApp: App {
     @State private var environment: BlueskyEnvironment?
     /// Timeline feed store created in boot() and pre-loading before views appear.
     @State private var timelineFeedStore: FeedStore?
+    /// Appearance preferences (color mode, dark variant, font family, font
+    /// size). Created during boot() so the value is available before any view
+    /// renders, and shared with the Settings screen via the SwiftUI
+    /// environment so both write to the same persisted source of truth.
+    @State private var appearance: AppearanceStore?
 
     init() {
         UNUserNotificationCenter.current().delegate = pushDelegate
@@ -27,12 +32,13 @@ struct Bluesky_SwiftUIApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if let session, let environment, let feedStore = timelineFeedStore {
+                if let session, let environment, let feedStore = timelineFeedStore, let appearance {
                     RootView()
                         .environment(session)
                         .environment(environment)
                         .environment(feedStore)
-                        .adaptiveBlueskyTheme()
+                        .environment(appearance)
+                        .modifier(AppearanceShellModifier(appearance: appearance))
                 } else {
                     ProgressView("Starting…")
                         .task { await boot() }
@@ -61,6 +67,7 @@ struct Bluesky_SwiftUIApp: App {
         let network = ATProtoClient(accountStore: accounts, pathMonitor: pathMonitor)
         let sm = SessionManager(accountStore: accounts, network: network)
         let prefs = UserDefaultsPreferencesStore(suiteName: "group.co.sstools.bluesky")
+        let appearanceStore = AppearanceStore(preferences: prefs)
         // Use App Group store when available (shared with extensions), otherwise fall
         // back to the app-local persistent store. Never use in-memory — if we cannot
         // write to disk the problem must be diagnosed and fixed, not silently hidden.
@@ -116,5 +123,48 @@ struct Bluesky_SwiftUIApp: App {
 
         session = sm
         environment = env
+        appearance = appearanceStore
+    }
+}
+
+// MARK: - Appearance shell modifier
+
+/// Applies the user's appearance preferences to the SwiftUI shell:
+///
+/// 1. `colorMode` → `.preferredColorScheme(_:)` (or no override when set to
+///    `.system`, so the host trait collection wins).
+/// 2. The active color scheme + `darkVariant` → which `BlueskyTheme` palette
+///    is injected via `.blueskyTheme(_:)`. In light mode the variant is
+///    irrelevant; in dark mode the user picks between the standard `.dark`
+///    palette and the lower-contrast `.dim` palette.
+private struct AppearanceShellModifier: ViewModifier {
+    @Bindable var appearance: AppearanceStore
+    /// Resolved color scheme — reflects the host trait collection when
+    /// `preferredColorScheme` is unset (`.system`), or the forced value when
+    /// `.light` / `.dark` is in effect.
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .preferredColorScheme(preferredScheme)
+            .blueskyTheme(activeTheme)
+    }
+
+    private var preferredScheme: ColorScheme? {
+        switch appearance.colorMode {
+        case .system: return nil
+        case .light:  return .light
+        case .dark:   return .dark
+        }
+    }
+
+    /// `.light` palette in light mode; in dark mode pick between `.dim` and
+    /// `.dark` based on the user's variant preference.
+    private var activeTheme: BlueskyTheme {
+        guard colorScheme == .dark else { return .light }
+        switch appearance.darkVariant {
+        case .dim:  return .dim
+        case .dark: return .dark
+        }
     }
 }
