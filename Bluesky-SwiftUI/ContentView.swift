@@ -31,6 +31,30 @@ struct RootView: View {
                         hasOnboarded = false
                     }
                 )
+            } else if session.currentAccount?.status == .deactivated {
+                // RN parity: a deactivated session must not enter MainTabView —
+                // API calls fail and the user has no path to reactivate. Mirror
+                // `view/shell/index.tsx`'s `currentAccount?.status ===
+                // 'deactivated'` branch with a dedicated holding screen. The
+                // takendown / suspended branches will live alongside this one
+                // (issue #0095).
+                DeactivatedView(
+                    session: session,
+                    onReactivated: {
+                        // SessionManager has already mutated `currentAccount`
+                        // to `.active`; the Group re-evaluates and routes to
+                        // MainTabView (or onboarding) on the next render.
+                    },
+                    onSignedOut: {
+                        // SessionManager cleared `currentAccount`; the gate
+                        // falls back to LoginView.
+                    },
+                    onAddAccount: {
+                        // No other accounts: drop to login. SessionManager
+                        // already has `currentAccount = nil` only if logout
+                        // ran; if not, force a re-route by clearing it.
+                    }
+                )
             } else if !hasOnboarded {
                 OnboardingFlowView(
                     session: session,
