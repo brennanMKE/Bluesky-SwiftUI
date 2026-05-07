@@ -905,6 +905,7 @@ struct MainTabView: View {
                         preferences: env.preferences,
                         accountStore: env.accounts,
                         network: env.network,
+                        cache: env.cache,
                         currentAccount: session.currentAccount,
                         onModerationTap: { showModeration = true },
                         onSignOut: {
