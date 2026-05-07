@@ -759,12 +759,25 @@ struct MainTabView: View {
                     }
                 }
                 #else
-                ToolbarItem(placement: .primaryAction) {
+                // macOS: render compose and "My Feeds" (#) as two independent
+                // ToolbarItems so each gets its own slot rather than a single
+                // shared capsule cluster (#0148). Distinct placements
+                // (.navigation for the leading sidebar control side, and
+                // .primaryAction for the trailing actions) keep the system
+                // from grouping them. Tooltips via .help() — same pattern as
+                // #0009.
+                //
+                // The leading sidebar toggle is provided automatically by
+                // NavigationSplitView and lives in the .navigation slot. We
+                // intentionally do not add another sidebar button here so the
+                // system control isn't duplicated.
+                ToolbarItem(id: "bsky.compose", placement: .primaryAction) {
                     Button {
                         showComposer = true
                     } label: {
                         Image(systemName: "square.and.pencil")
                     }
+                    .help("New post")
                 }
                 #endif
                 #if os(iOS)
@@ -780,12 +793,19 @@ struct MainTabView: View {
                     }
                 }
                 #else
-                ToolbarItem(placement: .primaryAction) {
+                // macOS: My Feeds (`#`) — matches the iOS-RN trailing icon
+                // (BlueskyTopBar with `number` glyph, #0072 / #0073). The
+                // previous `list.star` glyph was the macOS-specific "Saved
+                // Feeds" shortcut — same destination, different icon — so
+                // align with RN-iOS for parity. Separate ToolbarItem with a
+                // distinct id so it doesn't merge with the compose button.
+                ToolbarItem(id: "bsky.myfeeds", placement: .primaryAction) {
                     Button {
                         showSavedFeeds = true
                     } label: {
-                        Image(systemName: "list.star")
+                        Image(systemName: "number")
                     }
+                    .help("My Feeds")
                 }
                 #endif
             }
@@ -952,6 +972,7 @@ struct MainTabView: View {
                         } label: {
                             Image(systemName: "ellipsis.circle")
                         }
+                        .help("More")
                     }
                 }
                 #endif
