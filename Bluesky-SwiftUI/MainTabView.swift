@@ -905,6 +905,7 @@ struct MainTabView: View {
                         preferences: env.preferences,
                         accountStore: env.accounts,
                         network: env.network,
+                        currentAccount: session.currentAccount,
                         onModerationTap: { showModeration = true },
                         onSignOut: {
                             Task {
@@ -912,6 +913,19 @@ struct MainTabView: View {
                                     try await session.logout(did: account.did)
                                 } catch {
                                     mainTabViewLogger.error("logout failed: \(error.localizedDescription, privacy: .public)")
+                                }
+                            }
+                        },
+                        onAccountDeactivated: {
+                            // Mirror RN's `logoutCurrentAccount('Deactivated')`:
+                            // after the server flips the account to deactivated,
+                            // sign out so the RootView gate routes to
+                            // `DeactivatedView` on the next sign-in.
+                            Task {
+                                do {
+                                    try await session.logout(did: account.did)
+                                } catch {
+                                    mainTabViewLogger.error("post-deactivate logout failed: \(error.localizedDescription, privacy: .public)")
                                 }
                             }
                         }
