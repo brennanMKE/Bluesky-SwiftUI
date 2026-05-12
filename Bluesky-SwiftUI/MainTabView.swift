@@ -778,7 +778,17 @@ struct MainTabView: View {
             NotificationsScreen(
                 network: env.network,
                 onUnreadCountChange: { count in notificationBadge = count },
-                onAuthorTap: { profile in feedProfileDID = profile.did }
+                onAuthorTap: { profile in feedProfileDID = profile.did },
+                // #0160 / #0062: hoist the thread destination up to the app
+                // shell so the real `ThreadView` from `BlueskyFeed` mounts
+                // here. `BlueskyNotifications` cannot import `BlueskyFeed`
+                // without forming a cross-feature cycle, so the screen's
+                // internal `navigationDestination` is a placeholder that
+                // only activates when no `onPostTap` is wired (used by
+                // previews). The app target sits above both modules and
+                // can wire the real destination via the shared
+                // `threadURI` `@State`.
+                onPostTap: { uri in threadURI = uri }
             )
             // Destination for actor-avatar / expanded-actor taps on the
             // notifications list (#0080). Same shared `feedProfileDID`
@@ -790,6 +800,48 @@ struct MainTabView: View {
                     network: env.network,
                     accountStore: env.accounts,
                     viewerDID: session.currentAccount?.did
+                )
+            }
+            // #0160 / #0062: real `ThreadView` destination for tapped
+            // notifications (likes/replies/mentions/quotes/reposts). Mirrors
+            // the Home/Saved tab wiring so an in-thread tap on a reply or
+            // quote can keep navigating into deeper threads via the same
+            // `threadURI` state, and so the focal-post stat row's
+            // liked-by / reposted-by / quotes destinations work from the
+            // notifications path too (#0146).
+            .navigationDestination(item: $threadURI) { uri in
+                ThreadView(
+                    uri: uri,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    bookmarks: env.bookmarks,
+                    onAuthorTap: { profile in feedProfileDID = profile.did },
+                    onPostTap: { post in threadURI = post.uri },
+                    onLikedByTap: { postURI in likedByPostURI = postURI },
+                    onRepostedByTap: { postURI in repostedByPostURI = postURI },
+                    onQuotesTap: { postURI in quotesPostURI = postURI }
+                )
+            }
+            .navigationDestination(item: $likedByPostURI) { postURI in
+                LikedByScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $repostedByPostURI) { postURI in
+                RepostedByScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $quotesPostURI) { postURI in
+                QuotesOfScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onPostTap: { post in threadURI = post.uri },
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
                 )
             }
             #if os(iOS)
