@@ -76,6 +76,17 @@ struct MainTabView: View {
     @State private var repostedByPostURI: ATURI?
     /// AT-URI of the post whose `QuotesOfScreen` should push.
     @State private var quotesPostURI: ATURI?
+    /// AT-URI of a feed (`app.bsky.feed.generator`) opened from a
+    /// `feedgen-like` notification row (#0062). Reused as the navigation
+    /// item for a `CustomFeedTimelineView` push from the Notifications
+    /// tab. Distinct from `openCustomFeedURI` because that slot is iOS-only
+    /// and tied to the My Feeds entry point — keeping these separate avoids
+    /// cross-tab destination leaks.
+    @State private var notificationFeedURI: ATURI?
+    /// AT-URI of a starter pack (`app.bsky.graph.starterpack`) opened from
+    /// a `starterpack-joined` notification row (#0062). Drives a
+    /// `StarterPackScreen` push from the Notifications tab.
+    @State private var notificationStarterPackURI: ATURI?
 
     var body: some View {
         #if os(macOS)
@@ -151,6 +162,8 @@ struct MainTabView: View {
         showMyFeeds = false
         openCustomFeedURI = nil
         showNotificationSettings = false
+        notificationFeedURI = nil
+        notificationStarterPackURI = nil
     }
 
     // MARK: - macOS sidebar (NavigationSplitView)
@@ -788,7 +801,14 @@ struct MainTabView: View {
                 // previews). The app target sits above both modules and
                 // can wire the real destination via the shared
                 // `threadURI` `@State`.
-                onPostTap: { uri in threadURI = uri }
+                onPostTap: { uri in threadURI = uri },
+                // #0062: route `feedgen-like` rows to a real feed timeline
+                // and `starterpack-joined` rows to the starter pack screen.
+                // The screen dispatches by AT-URI collection segment so the
+                // single tap handler picks the right destination based on
+                // what `reasonSubject` actually points at.
+                onFeedTap: { uri in notificationFeedURI = uri },
+                onStarterPackTap: { uri in notificationStarterPackURI = uri }
             )
             // Destination for actor-avatar / expanded-actor taps on the
             // notifications list (#0080). Same shared `feedProfileDID`
@@ -842,6 +862,31 @@ struct MainTabView: View {
                     network: env.network,
                     onPostTap: { post in threadURI = post.uri },
                     onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            // #0062: real feed timeline for `feedgen-like` notifications.
+            // `reasonSubject` points at an `app.bsky.feed.generator` URI
+            // — without this, taps fell through to `ThreadView` and
+            // rendered an empty thread.
+            .navigationDestination(item: $notificationFeedURI) { uri in
+                CustomFeedTimelineView(
+                    feedURI: uri,
+                    title: uri.rkey ?? "Feed",
+                    network: env.network,
+                    accountStore: env.accounts,
+                    cache: env.cache,
+                    onPostTap: { post in threadURI = post.uri },
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            // #0062: real starter pack screen for `starterpack-joined`
+            // notifications. `reasonSubject` points at an
+            // `app.bsky.graph.starterpack` URI.
+            .navigationDestination(item: $notificationStarterPackURI) { uri in
+                StarterPackScreen(
+                    starterPackURI: uri,
+                    network: env.network,
+                    accountStore: env.accounts
                 )
             }
             #if os(iOS)
