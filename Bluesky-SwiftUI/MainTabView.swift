@@ -21,6 +21,10 @@ struct MainTabView: View {
     @Environment(SessionManager.self) private var session
     @Environment(BlueskyEnvironment.self) private var env
     @Environment(\.blueskyTheme) private var theme
+    /// Optional UI-test navigation driver. `nil` in production (the app injects
+    /// `nil` when `BLUESKY_UI_TEST_SCRIPT` is absent), so the driver code path
+    /// is dead weight only under UI test. See `UITestNavigator`.
+    @Environment(UITestNavigator.self) private var uiTestNavigator: UITestNavigator?
     @State private var selectedTab: AppTab? = .home
     @State private var messageBadge = 0
     @State private var notificationBadge = 0
@@ -102,6 +106,15 @@ struct MainTabView: View {
                 OfflineBanner(state: offlineBannerState)
             }
             .task { await observePathStatus() }
+            .modifier(UITestDriverModifier(
+                navigator: uiTestNavigator,
+                selectedTab: $selectedTab,
+                threadURI: $threadURI,
+                showSettings: $showSettings,
+                showComposer: $showComposer,
+                showModeration: $showModeration,
+                showBookmarks: $showBookmarks
+            ))
         #else
         adaptiveLayout
             .onOpenURL { handleDeepLink($0) }
@@ -115,6 +128,15 @@ struct MainTabView: View {
                 OfflineBanner(state: offlineBannerState)
             }
             .task { await observePathStatus() }
+            .modifier(UITestDriverModifier(
+                navigator: uiTestNavigator,
+                selectedTab: $selectedTab,
+                threadURI: $threadURI,
+                showSettings: $showSettings,
+                showComposer: $showComposer,
+                showModeration: $showModeration,
+                showBookmarks: $showBookmarks
+            ))
         #endif
     }
 
@@ -1122,6 +1144,73 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         case .saved:         "bookmark"
         case .profile:       "person.circle"
         }
+    }
+}
+
+// MARK: - UI test driver modifier
+
+/// Bridges the optional `UITestNavigator` into `MainTabView`'s private
+/// navigation `@State`. Only meaningful under UI test: when `navigator` is
+/// `nil` (the production case) the `.task` returns immediately and no overlay
+/// or observation runs.
+///
+/// On appear it kicks off the navigator's scripted `run()` loop. Because the
+/// navigator is `@Observable`, mutating its `selectedTab` / `threadURI` /
+/// `shouldOpen*` properties inside `run()` invalidates this view, and the
+/// `.onChange` handlers below copy each value into the matching binding —
+/// driving the app through its normal navigation paths exactly as a user tap
+/// would. A hidden `Text` carrying the `ui-test-driver-error` accessibility
+/// label exposes any decode / timeout failure to the XCUITest process.
+private struct UITestDriverModifier: ViewModifier {
+    let navigator: UITestNavigator?
+    @Binding var selectedTab: AppTab?
+    @Binding var threadURI: ATURI?
+    @Binding var showSettings: Bool
+    @Binding var showComposer: Bool
+    @Binding var showModeration: Bool
+    @Binding var showBookmarks: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                guard let navigator else { return }
+                // Apply any state the script already produced before the first
+                // observation fires, then replay the remaining intents.
+                applyNavigatorState(navigator)
+                await navigator.run()
+                applyNavigatorState(navigator)
+            }
+            .onChange(of: navigator?.selectedTab) { _, newValue in
+                if let newValue { selectedTab = newValue }
+            }
+            .onChange(of: navigator?.threadURI) { _, newValue in
+                if let newValue { threadURI = newValue }
+            }
+            .onChange(of: navigator?.shouldOpenSettings) { _, newValue in
+                if newValue == true { showSettings = true }
+            }
+            .onChange(of: navigator?.shouldOpenComposer) { _, newValue in
+                if newValue == true { showComposer = true }
+            }
+            .onChange(of: navigator?.shouldOpenModeration) { _, newValue in
+                if newValue == true { showModeration = true }
+            }
+            .onChange(of: navigator?.shouldOpenBookmarks) { _, newValue in
+                if newValue == true { showBookmarks = true }
+            }
+            // The `ui-test-driver-error` surface lives at the app root (see
+            // `Bluesky_SwiftUIApp`) so it is readable even before login, e.g. on
+            // a script decode failure. No per-screen overlay is needed here.
+    }
+
+    /// Copies the navigator's current navigation state into the bindings.
+    private func applyNavigatorState(_ navigator: UITestNavigator) {
+        if let tab = navigator.selectedTab { selectedTab = tab }
+        if let uri = navigator.threadURI { threadURI = uri }
+        if navigator.shouldOpenSettings { showSettings = true }
+        if navigator.shouldOpenComposer { showComposer = true }
+        if navigator.shouldOpenModeration { showModeration = true }
+        if navigator.shouldOpenBookmarks { showBookmarks = true }
     }
 }
 

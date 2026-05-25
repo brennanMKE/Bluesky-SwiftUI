@@ -19,6 +19,10 @@ struct Bluesky_SwiftUIApp: App {
     @State private var environment: BlueskyEnvironment?
     /// Timeline feed store created in boot() and pre-loading before views appear.
     @State private var timelineFeedStore: FeedStore?
+    /// UI-test navigation driver. Non-nil only when `BLUESKY_UI_TEST_SCRIPT` is
+    /// present in the launch environment — production launches never allocate
+    /// it (see `UITestNavigator.fromEnvironment`).
+    @State private var uiTestNavigator: UITestNavigator?
     /// Appearance preferences (color mode, dark variant, font family, font
     /// size). Created during boot() so the value is available before any view
     /// renders, and shared with the Settings screen via the SwiftUI
@@ -38,10 +42,31 @@ struct Bluesky_SwiftUIApp: App {
                         .environment(environment)
                         .environment(feedStore)
                         .environment(appearance)
+                        // Injects the optional UI-test navigator. In production
+                        // `uiTestNavigator` is `nil`, so `MainTabView`'s
+                        // `@Environment(UITestNavigator?.self)` resolves to `nil`
+                        // and the driver code path is never entered.
+                        .environment(uiTestNavigator)
                         .modifier(AppearanceShellModifier(appearance: appearance))
                 } else {
                     ProgressView("Starting…")
                         .task { await boot() }
+                }
+            }
+            // Root-level UI-test error surface. Renders the `ui-test-driver-error`
+            // accessibility label whenever the navigator records a decode /
+            // dispatch failure — even before login — so the XCUITest process can
+            // read it via `app.staticTexts["ui-test-driver-error"]`. Hidden and
+            // zero-size in all other cases (and absent entirely in production,
+            // where `uiTestNavigator` is `nil`).
+            .overlay(alignment: .top) {
+                if let message = uiTestNavigator?.scriptError {
+                    Text(message)
+                        .frame(width: 0, height: 0)
+                        .opacity(0.001)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("ui-test-driver-error")
+                        .accessibilityLabel("ui-test-driver-error")
                 }
             }
             // The View-level modifier marks the existing window instance as the
@@ -113,6 +138,25 @@ struct Bluesky_SwiftUIApp: App {
         )
         await sm.restoreLastSession()
 
+        // UI-test auto-login: when the launch environment carries test
+        // credentials AND no live session was restored, sign in programmatically
+        // via `createSession` so the scripted navigator can drive a logged-in
+        // app. Gated on `BLUESKY_UI_TEST_SCRIPT` so this never runs outside a
+        // UI-test launch. Credentials come from the harness's launch
+        // environment — never from a committed file.
+        let environmentVars = ProcessInfo.processInfo.environment
+        if environmentVars["BLUESKY_UI_TEST_SCRIPT"] != nil,
+           sm.currentAccount == nil,
+           let handle = environmentVars["BLUESKY_TEST_HANDLE"], !handle.isEmpty,
+           let password = environmentVars["BLUESKY_TEST_PASSWORD"], !password.isEmpty {
+            do {
+                _ = try await sm.login(identifier: handle, password: password, authFactorToken: nil)
+                bootLogger.info("ui-test: programmatic sign-in succeeded for \(handle, privacy: .public)")
+            } catch {
+                bootLogger.error("ui-test: programmatic sign-in failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
         // Create the timeline FeedStore and kick off its initial load as a plain Task —
         // not tied to any SwiftUI view lifecycle, so it cannot be cancelled by view
         // recreation. The store is @Observable so FeedView will update automatically
@@ -120,6 +164,13 @@ struct Bluesky_SwiftUIApp: App {
         let feedStore = FeedStore(network: network, accountStore: accounts, cache: cache)
         Task { await feedStore.loadInitial(selection: .timeline) }
         timelineFeedStore = feedStore
+
+        // Build the scripted navigator only when a script is present, and hand
+        // it the live FeedStore so its `waitForFeedLoad` / `tapFirstPost`
+        // intents poll the same instance the UI renders.
+        let navigator = UITestNavigator.fromEnvironment()
+        navigator?.attach(feedStore: feedStore)
+        uiTestNavigator = navigator
 
         session = sm
         environment = env

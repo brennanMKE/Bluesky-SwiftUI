@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "00000000-0000-0000-0000-0000000175FF",
+      "name" : "Screenshots",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "BLUESKY_TEST_HANDLE",
+        "value" : "$(BLUESKY_TEST_HANDLE)"
+      },
+      {
+        "key" : "BLUESKY_TEST_PASSWORD",
+        "value" : "$(BLUESKY_TEST_PASSWORD)"
+      }
+    ],
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Bluesky-SwiftUI.xcodeproj",
+      "identifier" : "26652AC82F9B150300646A0F",
+      "name" : "Bluesky-SwiftUI"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:Bluesky-SwiftUI.xcodeproj",
+        "identifier" : "26652ADF2F9B150500646A0F",
+        "name" : "Bluesky-SwiftUIUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

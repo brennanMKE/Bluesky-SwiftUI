@@ -45,28 +45,12 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
-      <Testables>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "26652AD52F9B150500646A0F"
-               BuildableName = "Bluesky-SwiftUITests.xctest"
-               BlueprintName = "Bluesky-SwiftUITests"
-               ReferencedContainer = "container:Bluesky-SwiftUI.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "26652ADF2F9B150500646A0F"
-               BuildableName = "Bluesky-SwiftUIUITests.xctest"
-               BlueprintName = "Bluesky-SwiftUIUITests"
-               ReferencedContainer = "container:Bluesky-SwiftUI.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-      </Testables>
+      <TestPlans>
+         <TestPlanReference
+            reference = "container:Screenshots.xctestplan"
+            default = "YES">
+         </TestPlanReference>
+      </TestPlans>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
