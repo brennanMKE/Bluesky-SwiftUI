@@ -1,0 +1,5 @@
+// Beta.xcconfig — development build overrides
+// Applied when the "Bluesky (Beta)" scheme is selected.
+
+PRODUCT_BUNDLE_IDENTIFIER = co.sstools.Bluesky.beta
+PRODUCT_NAME = Bluesky Beta

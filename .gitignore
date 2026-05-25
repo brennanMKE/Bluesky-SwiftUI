@@ -3,3 +3,5 @@ build/
 .build/
 xcuserdata/
 logs/
+Configuration/Active.xcconfig
+screenshots/

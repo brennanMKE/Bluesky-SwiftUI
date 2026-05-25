@@ -34,3 +34,5 @@ SDKROOT[sdk=macos*] = macosx
 
 // Framework rpath: iOS uses Frameworks/, macOS uses ../Frameworks/
 LD_RUNPATH_SEARCH_PATHS[sdk=iphone*] = @executable_path/Frameworks
+
+#include? "Active.xcconfig"
