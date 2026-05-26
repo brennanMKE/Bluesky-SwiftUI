@@ -260,7 +260,18 @@ final class UITestNavigator {
             return false
 
         case .openSettings:
+            // Switch to Profile first, then let the tab change settle before
+            // raising the push flag. The Profile tab hosts the
+            // `navigationDestination(isPresented: $showSettings)`, but it (and
+            // its NavigationStack) is only mounted after the tab switch, and
+            // the tab change fires `resetTransientNavState()` which clears the
+            // flag. Setting both in the same synchronous block races that
+            // reset and can set the flag before the destination exists. By
+            // yielding here we let SwiftUI process the tab switch + reset and
+            // mount the Profile content, then raise the flag — mirroring how
+            // `tapFirstPost` waits for the feed before setting `threadURI`.
             selectedTab = .profile
+            await settleAfterTabSwitch()
             shouldOpenSettings = true
             return true
 
@@ -269,7 +280,11 @@ final class UITestNavigator {
             return true
 
         case .openModeration:
+            // Same ordering as `openSettings`: settle the Profile tab switch
+            // before raising the flag so the destination is mounted and the
+            // tab-change reset has already run.
             selectedTab = .profile
+            await settleAfterTabSwitch()
             shouldOpenModeration = true
             return true
 
@@ -288,6 +303,22 @@ final class UITestNavigator {
             try? await Task.sleep(nanoseconds: UInt64(clamped * 1_000_000_000))
             return true
         }
+    }
+
+    /// Lets a `selectedTab` change propagate through SwiftUI before the next
+    /// mutation. A tab switch recreates the destination's NavigationStack (the
+    /// content is keyed on `.id(selectedTab)`) and fires the
+    /// `resetTransientNavState()` `onChange`, which clears the `shouldOpen*`
+    /// mirrors. Yielding for a couple of run-loop turns ensures the freshly
+    /// mounted Profile content — and its `navigationDestination` — exists, and
+    /// that the reset has already run, before we raise the push flag. Without
+    /// this the flag races the reset and is sometimes cleared on iOS.
+    @MainActor
+    private func settleAfterTabSwitch() async {
+        // Two short sleeps span the tab-switch view update and the subsequent
+        // reset/mount cycle; 0.3s total is well under any single intent's 10s
+        // budget and imperceptible to the test run.
+        try? await Task.sleep(nanoseconds: 300_000_000)
     }
 
     /// Polls the injected `FeedStore` until it has at least `minPosts` posts or

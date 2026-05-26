@@ -56,6 +56,42 @@ final class UITestNavigatorTests: XCTestCase {
         )
     }
 
+    /// AC (#0185): `[{"intent":"selectTab","tab":"profile"},{"intent":"openSettings"}]`
+    /// reliably pushes `SettingsScreen` on iOS via the driver intent — no
+    /// own-profile-menu workaround. This is the regression guard for the
+    /// timing/ordering fix so other suites can rely on the intent.
+    @MainActor
+    func testOpenSettingsIntentPushesSettingsScreen() throws {
+        let creds = try requireCredentials()
+        harness.launch(
+            script: [.profile, .openSettings],
+            handle: creds.handle, password: creds.password
+        )
+        XCTAssertTrue(harness.waitForMainTabView(), "MainTabView did not appear")
+        harness.assertNoScriptError()
+        XCTAssertTrue(
+            element("settings-screen").waitForExistence(timeout: 15),
+            "settings-screen did not push after the openSettings driver intent (#0185)"
+        )
+    }
+
+    /// AC (#0185): `[{"intent":"selectTab","tab":"profile"},{"intent":"openModeration"}]`
+    /// reliably pushes `ModerationScreen` on iOS via the driver intent.
+    @MainActor
+    func testOpenModerationIntentPushesModerationScreen() throws {
+        let creds = try requireCredentials()
+        harness.launch(
+            script: [.profile, .openModeration],
+            handle: creds.handle, password: creds.password
+        )
+        XCTAssertTrue(harness.waitForMainTabView(), "MainTabView did not appear")
+        harness.assertNoScriptError()
+        XCTAssertTrue(
+            element("moderation-screen").waitForExistence(timeout: 15),
+            "moderation-screen did not push after the openModeration driver intent (#0185)"
+        )
+    }
+
     // MARK: - Credential-independent
 
     /// AC: the `ui-test-driver-error` accessibility label is readable from the
@@ -73,6 +109,16 @@ final class UITestNavigatorTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// First element of any type carrying `identifier`. SwiftUI renders an
+    /// `.accessibilityIdentifier` container as a generic element rather than a
+    /// concrete UIKit type, so we match any descendant — same pattern as
+    /// `SettingsModerationUITests`.
+    private func element(_ identifier: String) -> XCUIElement {
+        harness.app.descendants(matching: .any)
+            .matching(identifier: identifier)
+            .firstMatch
+    }
 
     private func requireCredentials() throws -> (handle: String, password: String) {
         guard let creds = BlueskyUITestHarness.credentialsFromEnvironment() else {
