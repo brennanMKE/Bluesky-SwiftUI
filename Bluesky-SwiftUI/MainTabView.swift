@@ -803,7 +803,62 @@ struct MainTabView: View {
             }
             #endif
         case .search:
-            SearchScreen(network: env.network)
+            // #0184: hoist the actor / post destinations up to the app shell so
+            // tapping a People result pushes a real `ProfileScreen` and tapping
+            // a Posts result pushes a real `ThreadView`. `BlueskySearch` cannot
+            // import `BlueskyProfile`/`BlueskyFeed` without a cross-feature
+            // cycle, so — exactly like the Notifications tab — the screen
+            // exposes `onActorTap`/`onPostTap` closures and the app target
+            // (which sits above both modules) maps them onto the shared
+            // `feedProfileDID` / `threadURI` navigation state.
+            SearchScreen(
+                network: env.network,
+                onActorTap: { profile in feedProfileDID = profile.did },
+                onPostTap: { post in threadURI = post.uri }
+            )
+            .navigationDestination(item: $feedProfileDID) { did in
+                ProfileScreen(
+                    actorDID: did,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    viewerDID: session.currentAccount?.did
+                )
+            }
+            .navigationDestination(item: $threadURI) { uri in
+                ThreadView(
+                    uri: uri,
+                    network: env.network,
+                    accountStore: env.accounts,
+                    bookmarks: env.bookmarks,
+                    onAuthorTap: { profile in feedProfileDID = profile.did },
+                    onPostTap: { post in threadURI = post.uri },
+                    onLikedByTap: { postURI in likedByPostURI = postURI },
+                    onRepostedByTap: { postURI in repostedByPostURI = postURI },
+                    onQuotesTap: { postURI in quotesPostURI = postURI }
+                )
+            }
+            .navigationDestination(item: $likedByPostURI) { postURI in
+                LikedByScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $repostedByPostURI) { postURI in
+                RepostedByScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            .navigationDestination(item: $quotesPostURI) { postURI in
+                QuotesOfScreen(
+                    postURI: postURI,
+                    network: env.network,
+                    onPostTap: { post in threadURI = post.uri },
+                    onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
         case .messages:
             ConversationListScreen(
                 network: env.network,

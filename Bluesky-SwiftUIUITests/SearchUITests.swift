@@ -285,10 +285,10 @@ final class SearchUITests: XCTestCase {
         result.tap()
 
         let profile = element("profile-screen")
-        if !profile.waitForExistence(timeout: 10) {
-            throw XCTSkip("Tapping an account result did not push profile-screen — search-result navigation may not be wired in this build (onActorTap unset on the Search tab).")
-        }
-        XCTAssertTrue(profile.exists, "profile-screen not present after tapping an account result")
+        XCTAssertTrue(
+            profile.waitForExistence(timeout: 10),
+            "Tapping an account result did not push profile-screen — search-result navigation (onActorTap) is wired (#0184), so this is a regression."
+        )
     }
 
     /// Tapping a Posts result navigates to the thread (`thread-focal-post`).
@@ -314,14 +314,23 @@ final class SearchUITests: XCTestCase {
         guard postCell.waitForExistence(timeout: 8) else {
             throw XCTSkip("Posts tab returned no post-cell for 'bluesky' — cannot test post → thread navigation.")
         }
-        XCTAssertTrue(postCell.isHittable, "First Posts-tab post-cell is not hittable")
-        postCell.tap()
+        // `PostCard` wires its open-thread `onTap` onto the inner content region
+        // (author header + body + embed), not the whole cell — the action bar,
+        // avatar column, and image embeds are deliberately excluded (each has
+        // its own gesture), so tapping the `post-cell` container's centre can
+        // miss the thread `onTap`. The card exposes that content region as a
+        // button-trait `post-open-thread` element (#0184) precisely so this tap
+        // is reliable; fall back to the cell if the runtime doesn't surface it.
+        let openThread = harness.app.buttons["post-open-thread"].firstMatch
+        let target = openThread.waitForExistence(timeout: 5) ? openThread : postCell
+        XCTAssertTrue(target.isHittable, "Post open-thread target is not hittable")
+        target.tap()
 
         let focal = element("thread-focal-post")
-        if !focal.waitForExistence(timeout: 10) {
-            throw XCTSkip("Tapping a post result did not push thread-focal-post — search-result navigation may not be wired in this build (onPostTap unset on the Search tab).")
-        }
-        XCTAssertTrue(focal.exists, "thread-focal-post not present after tapping a post result")
+        XCTAssertTrue(
+            focal.waitForExistence(timeout: 10),
+            "Tapping a post result did not push thread-focal-post — search-result navigation (onPostTap) is wired (#0184), so this is a regression."
+        )
     }
 
     // MARK: - Screenshots
