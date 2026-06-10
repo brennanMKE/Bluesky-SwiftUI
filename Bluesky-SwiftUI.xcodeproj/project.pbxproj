@@ -47,6 +47,8 @@
 		26652AD62F9B150500646A0F /* Bluesky-SwiftUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Bluesky-SwiftUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		26652AE02F9B150500646A0F /* Bluesky-SwiftUIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Bluesky-SwiftUIUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		26652B242F9B2A4D00646A0F /* Build.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Build.xcconfig; sourceTree = "<group>"; };
+		26CECD012FDA0CBE002CDCD3 /* Beta.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Beta.xcconfig; sourceTree = "<group>"; };
+		26CECD022FDA0CBE002CDCD3 /* Prod.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Prod.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -145,6 +147,8 @@
 		26652B232F9B2A4300646A0F /* Configuration */ = {
 			isa = PBXGroup;
 			children = (
+				26CECD012FDA0CBE002CDCD3 /* Beta.xcconfig */,
+				26CECD022FDA0CBE002CDCD3 /* Prod.xcconfig */,
 				26652B242F9B2A4D00646A0F /* Build.xcconfig */,
 			);
 			path = Configuration;
