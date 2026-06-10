@@ -2,7 +2,7 @@
 #
 # screenshot.sh [--screen <name>]
 #
-# Captures the frontmost Bluesky Beta window to screenshots/.
+# Captures the frontmost Bluesky (Beta build) window to screenshots/.
 #
 #   ./screenshot.sh                  # screenshots/screenshot_<timestamp>.png
 #   ./screenshot.sh --screen home    # screenshots/home_<timestamp>.png
@@ -11,7 +11,7 @@
 # Run ./scripts/set-environment.sh Beta before building if needed.
 
 BUNDLE_ID="co.sstools.Bluesky.beta"
-APP_NAME="Bluesky Beta"
+APP_NAME="Bluesky"
 
 SCREEN_NAME=""
 if [[ "$1" == "--screen" && -n "$2" ]]; then

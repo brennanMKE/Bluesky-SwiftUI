@@ -1,5 +1,7 @@
 // Beta.xcconfig — development build overrides
 // Applied when the "Bluesky (Beta)" scheme is selected.
 
+// PRODUCT_NAME must stay identical across variants — it feeds the product
+// filename, which Xcode writes back into project.pbxproj and the schemes,
+// dirtying source control on every Beta/Prod switch. Only the bundle ID varies.
 PRODUCT_BUNDLE_IDENTIFIER = co.sstools.Bluesky.beta
-PRODUCT_NAME = Bluesky Beta
