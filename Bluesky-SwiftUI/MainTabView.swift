@@ -107,6 +107,18 @@ struct MainTabView: View {
     /// a `starterpack-joined` notification row (#0062). Drives a
     /// `StarterPackScreen` push from the Notifications tab.
     @State private var notificationStarterPackURI: ATURI?
+    /// AT-URI of a starter pack opened from a profile's Starter Packs tab
+    /// (#0206) — own profile or a pushed profile on the Home / Search /
+    /// Saved / Profile stacks. Drives a `StarterPackScreen` push.
+    @State private var starterPackURI: ATURI?
+    /// Presents the Starter Pack create wizard (#0206), entered from the
+    /// own profile's Starter Packs tab (RN: `ProfileStarterPacks` → the
+    /// `StarterPackWizard` route).
+    @State private var showStarterPackCreate = false
+    /// URI of a pack the wizard just created, parked until the sheet's
+    /// `onDismiss` so the `StarterPackScreen` push isn't swallowed by the
+    /// dismissal transition (#0206; RN replaces the route directly).
+    @State private var pendingCreatedStarterPackURI: ATURI?
     /// Entry into the immersive video feed (#0205). Set by a tap on a card
     /// in the Discover tab's "Trending Videos" interstitial (RN: the
     /// `VideoFeed` route, navigated to from `CompactVideoPostCard`), or by
@@ -266,6 +278,9 @@ struct MainTabView: View {
         showNotificationSettings = false
         notificationFeedURI = nil
         notificationStarterPackURI = nil
+        starterPackURI = nil
+        showStarterPackCreate = false
+        pendingCreatedStarterPackURI = nil
         videoFeedEntry = nil
 
         // #0030: a push-notification route that required a tab switch parked
@@ -778,7 +793,19 @@ struct MainTabView: View {
                     actorDID: did,
                     network: env.network,
                     accountStore: env.accounts,
-                    viewerDID: session.currentAccount?.did
+                    viewerDID: session.currentAccount?.did,
+                    // #0206: a pushed profile's Starter Packs tab opens the
+                    // pack on the same stack. Creation is only offered on
+                    // the Profile tab's own-profile mount.
+                    onStarterPackTap: { uri in starterPackURI = uri }
+                )
+            }
+            // #0206: starter pack opened from a profile's Starter Packs tab.
+            .navigationDestination(item: $starterPackURI) { uri in
+                StarterPackScreen(
+                    starterPackURI: uri,
+                    network: env.network,
+                    accountStore: env.accounts
                 )
             }
             .navigationDestination(item: $likedByPostURI) { postURI in
@@ -962,7 +989,19 @@ struct MainTabView: View {
                     actorDID: did,
                     network: env.network,
                     accountStore: env.accounts,
-                    viewerDID: session.currentAccount?.did
+                    viewerDID: session.currentAccount?.did,
+                    // #0206: a pushed profile's Starter Packs tab opens the
+                    // pack on the same stack. Creation is only offered on
+                    // the Profile tab's own-profile mount.
+                    onStarterPackTap: { uri in starterPackURI = uri }
+                )
+            }
+            // #0206: starter pack opened from a profile's Starter Packs tab.
+            .navigationDestination(item: $starterPackURI) { uri in
+                StarterPackScreen(
+                    starterPackURI: uri,
+                    network: env.network,
+                    accountStore: env.accounts
                 )
             }
             .navigationDestination(item: $threadURI) { uri in
@@ -1041,7 +1080,19 @@ struct MainTabView: View {
                     actorDID: did,
                     network: env.network,
                     accountStore: env.accounts,
-                    viewerDID: session.currentAccount?.did
+                    viewerDID: session.currentAccount?.did,
+                    // #0206: a pushed profile's Starter Packs tab opens the
+                    // pack on the same stack. Creation is only offered on
+                    // the Profile tab's own-profile mount.
+                    onStarterPackTap: { uri in starterPackURI = uri }
+                )
+            }
+            // #0206: starter pack opened from a profile's Starter Packs tab.
+            .navigationDestination(item: $starterPackURI) { uri in
+                StarterPackScreen(
+                    starterPackURI: uri,
+                    network: env.network,
+                    accountStore: env.accounts
                 )
             }
             // #0160 / #0062: real `ThreadView` destination for tapped
@@ -1144,7 +1195,19 @@ struct MainTabView: View {
                     actorDID: did,
                     network: env.network,
                     accountStore: env.accounts,
-                    viewerDID: session.currentAccount?.did
+                    viewerDID: session.currentAccount?.did,
+                    // #0206: a pushed profile's Starter Packs tab opens the
+                    // pack on the same stack. Creation is only offered on
+                    // the Profile tab's own-profile mount.
+                    onStarterPackTap: { uri in starterPackURI = uri }
+                )
+            }
+            // #0206: starter pack opened from a profile's Starter Packs tab.
+            .navigationDestination(item: $starterPackURI) { uri in
+                StarterPackScreen(
+                    starterPackURI: uri,
+                    network: env.network,
+                    accountStore: env.accounts
                 )
             }
             .navigationDestination(item: $likedByPostURI) { postURI in
@@ -1182,7 +1245,11 @@ struct MainTabView: View {
                     onSettings:   { showSettings = true },
                     onSaved:      { showBookmarks = true },
                     onMyLists:    { showLists = true },
-                    onModeration: { showModeration = true }
+                    onModeration: { showModeration = true },
+                    // #0206: Starter Packs tab — open a pack on this stack,
+                    // and let the own profile launch the create wizard.
+                    onStarterPackTap:    { uri in starterPackURI = uri },
+                    onCreateStarterPack: { showStarterPackCreate = true }
                 )
                 #if os(macOS)
                 .toolbar {
@@ -1246,6 +1313,34 @@ struct MainTabView: View {
                         actorDID: account.did.rawValue,
                         network: env.network,
                         accountStore: env.accounts
+                    )
+                }
+                // #0206: starter pack opened from the own profile's Starter
+                // Packs tab (or pushed right after the wizard creates one —
+                // RN parity with `navigation.replace('StarterPack', …)`).
+                .navigationDestination(item: $starterPackURI) { uri in
+                    StarterPackScreen(
+                        starterPackURI: uri,
+                        network: env.network,
+                        accountStore: env.accounts
+                    )
+                }
+                // #0206: multi-step Starter Pack create wizard (#0128),
+                // entered from the Starter Packs tab's Create button. A
+                // successful create parks the new pack's URI and the push
+                // fires once the sheet has fully dismissed (mirrors RN's
+                // `navigation.replace('StarterPack', …)`).
+                .sheet(isPresented: $showStarterPackCreate, onDismiss: {
+                    if let uri = pendingCreatedStarterPackURI {
+                        pendingCreatedStarterPackURI = nil
+                        starterPackURI = uri
+                    }
+                }) {
+                    StarterPackCreateSheet(
+                        network: env.network,
+                        accountStore: env.accounts,
+                        onDismiss: {},
+                        onCreated: { uri in pendingCreatedStarterPackURI = uri }
                     )
                 }
             } else {

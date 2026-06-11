@@ -3,8 +3,10 @@
 // Module 15 gate live validation on iPhone (#0066): Lists, Starter Packs,
 // Saved Feeds, Video Feed, Labeler Profile, App Passwords, Bookmarks.
 //
-// Starter Packs hub/create still has no entry point in the iOS shell (#0206),
-// so it is validated by code analysis in the gate issue rather than here.
+// Starter Packs gained their entry points in #0206 (profile Starter Packs
+// tab + create wizard + owner delete) and are covered by
+// `testStarterPacksProfileTabCreateOpenDelete0206` (mutation, fully
+// reversed) and `testStarterPackPublicReadOnly0206` (read-only).
 // Video Feed gained its entry point in #0205 and is covered by
 // `testVideoFeedFromTrendingVideosInterstitial0205`. The others:
 //
@@ -766,5 +768,235 @@ final class RemainingScreensGateUITests: XCTestCase {
             "Bookmark reappeared after relaunch — server delete failed (or pre-existing bookmarks present)"
         )
         harness.screenshot(screen: "0066-bookmarks-empty-relaunch")
+    }
+
+    // MARK: - Starter Packs (#0206)
+
+    /// Swipes the profile tab strip (a lazy horizontal scroller — offscreen
+    /// tabs are not in the accessibility tree until revealed) until the
+    /// Starter Packs tab exists, then taps it.
+    private func openStarterPacksTab() {
+        let posts = element("profile-posts-tab")
+        XCTAssertTrue(posts.waitForExistence(timeout: 15), "profile tab strip did not appear")
+        let stripY = posts.frame.midY
+        let target = element("profile-starterPacks-tab")
+
+        // `isHittable` throws ("activation point invalid") for elements a
+        // lazy horizontal stack has realized but not laid out on screen, so
+        // gate on the frame being fully inside the app window instead.
+        func tabIsTappable() -> Bool {
+            guard target.exists else { return false }
+            let f = target.frame
+            guard !f.isEmpty, f.width > 0 else { return false }
+            return harness.app.frame.contains(f.insetBy(dx: 1, dy: 1))
+        }
+
+        var attempts = 0
+        while !tabIsTappable() && attempts < 6 {
+            let appFrame = harness.app.frame
+            let origin = harness.app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: appFrame.maxX - 8, dy: stripY))
+            let end = origin.withOffset(CGVector(dx: appFrame.minX + 8, dy: stripY))
+            start.press(forDuration: 0.05, thenDragTo: end)
+            sleep(1)
+            attempts += 1
+        }
+        XCTAssertTrue(tabIsTappable(), "profile-starterPacks-tab never became tappable in the tab strip")
+        target.tap()
+        sleep(2)
+    }
+
+    /// Pull-to-refresh loop: refresh the profile until `name` is present
+    /// (`expectPresent == true`) or gone, tolerating AppView indexing lag.
+    private func refreshStarterPacksTab(until name: String, expectPresent: Bool, timeout: TimeInterval = 45) -> Bool {
+        let row = harness.app.staticTexts[name]
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if row.exists == expectPresent { return true }
+            harness.app.swipeDown()
+            sleep(3)
+        }
+        return row.exists == expectPresent
+    }
+
+    /// #0206 live leg: the own profile's Starter Packs tab is reachable, the
+    /// wizard creates "UITest-0206 Pack" end-to-end (8 suggested people, no
+    /// feeds), the created pack opens in `StarterPackScreen` (Follow All is
+    /// asserted to EXIST but is deliberately NOT tapped — #0066 mutation
+    /// policy), and the owner Delete entry reverses everything (pack record,
+    /// backing list, and its listitem rows). Resumable: if a marker pack
+    /// already exists from an interrupted run, creation is skipped and the
+    /// run proceeds straight to open + delete.
+    @MainActor
+    func testStarterPacksProfileTabCreateOpenDelete0206() throws {
+        let creds = try requireCredentials()
+        let packName = "UITest-0206 Pack"
+
+        harness.launch(script: [.profile], handle: creds.handle, password: creds.password)
+        XCTAssertTrue(harness.waitForMainTabView(), "MainTabView did not appear")
+        harness.assertNoScriptError()
+
+        openStarterPacksTab()
+        sleep(2)
+        harness.screenshot(screen: "0206-starter-packs-tab-initial")
+
+        let row = harness.app.staticTexts[packName]
+        if !row.exists {
+            // Empty state (or at least no marker pack): create one.
+            let create = element("starter-packs-create-button")
+            XCTAssertTrue(create.waitForExistence(timeout: 10), "Create button missing from the Starter Packs tab")
+            create.tap()
+
+            // Step 1: Choose People — the wizard requires 8 selections (RN
+            // minimum). The suggestions list is lazy (offscreen rows aren't
+            // in the tree), so select 8 stable, well-known accounts via the
+            // typeahead instead: type the handle, tap its row, clear, repeat.
+            // Selection only writes private listitem rows in the viewer's
+            // repo — nobody is notified or followed.
+            XCTAssertTrue(waitForScreenTitled("Choose People"), "Wizard did not open on the profiles step")
+            let searchPeople = harness.app.textFields["Search people"].firstMatch
+            XCTAssertTrue(searchPeople.waitForExistence(timeout: 10), "Search people field missing in the wizard")
+            let handles = [
+                "bsky.app", "atproto.com", "jay.bsky.team", "pfrazee.com",
+                "why.bsky.team", "support.bsky.team", "bnewbold.net", "safety.bsky.app",
+            ]
+            for handle in handles {
+                searchPeople.tap()
+                searchPeople.typeText(handle)
+                let row = cellContaining("@\(handle)")
+                XCTAssertTrue(row.waitForExistence(timeout: 12), "Typeahead row for @\(handle) did not appear")
+                row.tap()
+                usleep(300_000)
+                // Clear the query for the next round.
+                searchPeople.tap()
+                searchPeople.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: handle.count))
+            }
+            harness.screenshot(screen: "0206-wizard-people-selected")
+            let next = harness.app.buttons["Next"].firstMatch
+            XCTAssertTrue(next.waitForExistence(timeout: 5), "Next missing on the profiles step")
+            XCTAssertTrue(next.isEnabled, "Next not enabled after selecting 8 people")
+            next.tap()
+
+            // Step 2: Choose Feeds — skip.
+            XCTAssertTrue(waitForScreenTitled("Choose Feeds"), "Wizard did not advance to the feeds step")
+            let skip = harness.app.buttons["Skip"].firstMatch
+            XCTAssertTrue(skip.waitForExistence(timeout: 8), "Skip button missing on the feeds step")
+            skip.tap()
+
+            // Step 3: Details — name the pack. "\n" commits and drops the
+            // keyboard so the footer button stays hittable.
+            XCTAssertTrue(waitForScreenTitled("Starter Pack"), "Wizard did not advance to the details step")
+            let nameField = harness.app.textFields.firstMatch
+            XCTAssertTrue(nameField.waitForExistence(timeout: 8), "Name field missing on the details step")
+            nameField.tap()
+            nameField.typeText(packName + "\n")
+            harness.screenshot(screen: "0206-wizard-details")
+            let detailsNext = harness.app.buttons["Next"].firstMatch
+            XCTAssertTrue(detailsNext.waitForExistence(timeout: 5), "Next missing on the details step")
+            detailsNext.tap()
+
+            // Step 4: Preview — recap then Create (list + listitems + pack
+            // records; allow a generous window for the three-step write).
+            XCTAssertTrue(waitForScreenTitled("Preview"), "Wizard did not advance to the preview step")
+            XCTAssertTrue(harness.app.staticTexts[packName].waitForExistence(timeout: 5), "Preview does not show the pack name")
+            harness.screenshot(screen: "0206-wizard-preview")
+            let createButton = harness.app.buttons["Create"].firstMatch
+            XCTAssertTrue(createButton.waitForExistence(timeout: 5), "Create missing on the preview step")
+            createButton.tap()
+
+            // RN parity: the wizard replaces itself with the created pack's
+            // StarterPackScreen. The very first getStarterPack can race
+            // AppView indexing — on an error alert, dismiss, pop back, and
+            // re-open the pack from the (refreshed) tab.
+            let followAll = harness.app.buttons["Follow All"].firstMatch
+            if !followAll.waitForExistence(timeout: 30) {
+                if harness.app.alerts.firstMatch.exists {
+                    harness.app.alerts.buttons["OK"].firstMatch.tap()
+                }
+                popBack()
+                XCTAssertTrue(refreshStarterPacksTab(until: packName, expectPresent: true),
+                              "Created pack never appeared in the Starter Packs tab")
+                harness.app.staticTexts[packName].firstMatch.tap()
+                XCTAssertTrue(followAll.waitForExistence(timeout: 20), "StarterPackScreen did not render the created pack")
+            }
+        } else {
+            // Resumed run: the marker pack already exists — open it.
+            row.firstMatch.tap()
+            XCTAssertTrue(harness.app.buttons["Follow All"].firstMatch.waitForExistence(timeout: 20),
+                          "StarterPackScreen did not render the existing marker pack")
+        }
+
+        // Pack detail: Follow All must exist; per the #0066 mutation policy
+        // it is NOT tapped (it would fan out live follow records).
+        XCTAssertTrue(harness.app.buttons["Follow All"].firstMatch.exists, "Follow All missing on the pack screen")
+        harness.screenshot(screen: "0206-starter-pack-screen")
+
+        // Owner delete: share/overflow menu → Delete starter pack → confirm.
+        let menu = element("starter-pack-menu")
+        XCTAssertTrue(menu.waitForExistence(timeout: 8), "starter-pack-menu missing on the pack screen")
+        menu.tap()
+        let deleteEntry = harness.app.buttons["Delete starter pack"].firstMatch
+        XCTAssertTrue(deleteEntry.waitForExistence(timeout: 8), "Owner Delete entry missing from the pack menu")
+        harness.screenshot(screen: "0206-starter-pack-menu")
+        deleteEntry.tap()
+        let confirmDelete = harness.app.buttons["Delete"].firstMatch
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: 8), "Delete confirmation did not present")
+        confirmDelete.tap()
+
+        // The screen pops back to the profile on success (the delete sweeps
+        // listitems + list + pack, so allow it a moment).
+        XCTAssertTrue(element("profile-screen").waitForExistence(timeout: 20), "Did not return to the profile after delete")
+
+        // Reversal check: the row disappears from the tab (pull-to-refresh
+        // until the AppView catches up with the PDS delete).
+        XCTAssertTrue(refreshStarterPacksTab(until: packName, expectPresent: false),
+                      "Deleted pack still listed in the Starter Packs tab")
+        harness.screenshot(screen: "0206-starter-packs-after-delete")
+    }
+
+    /// #0206 read-only leg: a well-known public starter pack opens from
+    /// another user's profile — Search → bsky.app → Starter Packs tab →
+    /// first pack → `StarterPackScreen`. Asserts Follow All exists WITHOUT
+    /// tapping it, and that the owner Delete entry is absent for a pack the
+    /// viewer doesn't own. No writes of any kind.
+    @MainActor
+    func testStarterPackPublicReadOnly0206() throws {
+        let creds = try requireCredentials()
+
+        harness.launch(script: [.search], handle: creds.handle, password: creds.password)
+        XCTAssertTrue(harness.waitForMainTabView(), "MainTabView did not appear")
+        harness.assertNoScriptError()
+
+        // Search for the official Bluesky account (11 public starter packs).
+        let field = harness.app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "Search field did not appear")
+        field.tap()
+        field.typeText("bsky.app")
+        let result = harness.app.descendants(matching: .any)
+            .matching(identifier: "search-account-result").firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 15), "No people results for bsky.app")
+        result.tap()
+        XCTAssertTrue(element("profile-screen").waitForExistence(timeout: 15), "Profile did not push from search")
+
+        // The Starter Packs tab is gated on associated.starterPacks > 0 for
+        // other users — it must be visible for bsky.app.
+        openStarterPacksTab()
+        let card = element("starter-pack-card")
+        XCTAssertTrue(card.waitForExistence(timeout: 20), "No starter pack cards on bsky.app's Starter Packs tab")
+        harness.screenshot(screen: "0206-public-starter-packs-tab")
+
+        card.tap()
+        let followAll = harness.app.buttons["Follow All"].firstMatch
+        XCTAssertTrue(followAll.waitForExistence(timeout: 20), "Public starter pack did not open read-only")
+        harness.screenshot(screen: "0206-public-starter-pack-screen")
+
+        // Non-owner: the share menu must NOT offer Delete.
+        let menu = element("starter-pack-menu")
+        XCTAssertTrue(menu.waitForExistence(timeout: 8), "starter-pack-menu missing on the public pack screen")
+        menu.tap()
+        XCTAssertTrue(harness.app.buttons["Copy link"].firstMatch.waitForExistence(timeout: 8), "Share menu did not open")
+        XCTAssertFalse(harness.app.buttons["Delete starter pack"].exists,
+                       "Owner Delete entry leaked onto a pack the viewer doesn't own")
+        harness.screenshot(screen: "0206-public-starter-pack-menu")
     }
 }
