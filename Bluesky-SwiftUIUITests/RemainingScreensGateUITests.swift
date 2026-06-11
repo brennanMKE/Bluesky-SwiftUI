@@ -170,6 +170,72 @@ final class RemainingScreensGateUITests: XCTestCase {
         harness.screenshot(screen: "0066-myfeeds-recon-discover")
     }
 
+    /// #0066 gate re-run (Saved Feeds): a real `savedFeedsPrefV2` WRITE must
+    /// persist across a cold relaunch without wiping the existing saved set —
+    /// the exact regression that failed the 2026-06-10 run (the namespace had
+    /// been clobbered by the #0201 single-pref `putPreferences` bug; now fixed
+    /// and merge-based). Pin/unpin is the only reversible write available on a
+    /// one-feed account (the screen is a ScrollView, so the saved-row swipe
+    /// "Remove" is inert; the inline Pin/Unpin toggle is the working control).
+    /// Flow: unpin Discover → Save → relaunch → confirm it persisted as
+    /// saved-but-unpinned (server round-trip) AND Discover survived the write
+    /// → re-pin → Save → relaunch → confirm restored to pinned. Fully reversed:
+    /// the account ends with Discover pinned, exactly as it began.
+    @MainActor
+    func testSavedFeedsPinUnpinPersists0066Rerun() throws {
+        let creds = try requireCredentials()
+
+        func openMyFeeds() {
+            harness.launch(script: [.home, .waitForFeedLoad(minPosts: 1)], handle: creds.handle, password: creds.password)
+            XCTAssertTrue(harness.waitForMainTabView(), "MainTabView did not appear")
+            harness.assertNoScriptError()
+            let myFeeds = harness.app.buttons["My feeds"].firstMatch
+            XCTAssertTrue(myFeeds.waitForExistence(timeout: 10), "My feeds (#) button missing from the Home top bar")
+            myFeeds.tap()
+            XCTAssertTrue(waitForScreenTitled("My Feeds"), "My Feeds screen did not push")
+            sleep(4) // saved + suggested loads settle
+        }
+
+        func tapSave() {
+            let save = harness.app.buttons["Save"].firstMatch
+            XCTAssertTrue(save.waitForExistence(timeout: 8), "Save button did not appear after the pin toggle")
+            save.tap()
+            sleep(3) // let the putPreferences round-trip commit
+        }
+
+        // Baseline: Discover present and PINNED (exposes "Unpin").
+        openMyFeeds()
+        XCTAssertTrue(harness.app.staticTexts["Discover"].firstMatch.waitForExistence(timeout: 8), "Discover saved feed missing at baseline")
+        let unpin = harness.app.buttons["Unpin"].firstMatch
+        XCTAssertTrue(unpin.waitForExistence(timeout: 8), "Discover is not pinned at baseline (no Unpin toggle) — refusing to mutate an unexpected state")
+        harness.screenshot(screen: "0066-savedfeeds-baseline-pinned-rerun")
+        unpin.tap()
+        tapSave()
+
+        // Relaunch — server truth. Discover must survive the write and now be
+        // saved-but-unpinned (exposes "Pin").
+        harness.app.terminate()
+        openMyFeeds()
+        XCTAssertTrue(harness.app.staticTexts["Discover"].firstMatch.waitForExistence(timeout: 10), "Discover was wiped from savedFeedsPrefV2 by the unpin write (regression)")
+        let pin = harness.app.buttons["Pin"].firstMatch
+        XCTAssertTrue(pin.waitForExistence(timeout: 8), "Unpin did not persist across relaunch — Discover still shows Unpin")
+        harness.screenshot(screen: "0066-savedfeeds-unpinned-persisted-rerun")
+
+        // Restore: re-pin and Save.
+        pin.tap()
+        tapSave()
+
+        // Relaunch — confirm restored to the original pinned baseline.
+        harness.app.terminate()
+        openMyFeeds()
+        XCTAssertTrue(harness.app.staticTexts["Discover"].firstMatch.waitForExistence(timeout: 10), "Discover missing after the restore write")
+        XCTAssertTrue(
+            harness.app.buttons["Unpin"].firstMatch.waitForExistence(timeout: 8),
+            "Re-pin did not persist — Discover not restored to pinned (account left off-baseline)"
+        )
+        harness.screenshot(screen: "0066-savedfeeds-restored-pinned-rerun")
+    }
+
     // MARK: - Video Feed (#0205, read-only)
 
     /// READ-ONLY: validates the immersive Video Feed entry point added by
@@ -232,14 +298,24 @@ final class RemainingScreensGateUITests: XCTestCase {
 
     // MARK: - Labeler Profile (read-only recon)
 
-    /// READ-ONLY: walks Moderation → Advanced → first subscribed labeler →
-    /// LabelerProfileScreen, and records the subscribe button's title. For a
-    /// labeler listed under "subscribed labelers" (sourced from
-    /// `labelersPref`) the button must read "Unsubscribe"; it reading
-    /// "Subscribe" is live evidence that `LabelerProfileStore` derives
-    /// subscription state from the wrong preference (`savedFeeds`).
-    /// Does NOT tap the button — subscribing would write a malformed
-    /// `savedFeeds` item (`type: "labeler"`) to the live account.
+    /// READ-ONLY: walks Moderation → Advanced → first labeler row →
+    /// LabelerProfileScreen and asserts the subscribe-button state matches the
+    /// labeler's `labelersPref` membership (the #0202 contract).
+    ///
+    /// On the gate account `labelersPref` is empty, so post-#0202 the hub still
+    /// lists the always-on **Bluesky Moderation Service** app labeler (RN
+    /// `useMyLabelersQuery` prepends `BSKY_LABELER_DID`). That row opens a
+    /// LabelerProfileScreen whose Subscribe/Unsubscribe button is deliberately
+    /// HIDDEN (`isAppLabeler` — RN `ProfileHeaderLabeler`): the app labeler can
+    /// neither be subscribed nor unsubscribed. This test asserts that correct
+    /// hidden-button state. For a non-app labeler (only reachable once
+    /// `labelersPref` is non-empty) the button must instead read "Unsubscribe".
+    /// Either way the test performs NO writes; the full subscribe/unsubscribe
+    /// mutation round-trip against a seeded third-party labeler is covered by
+    /// the #0202 live verification (committed BlueskyKit `a870478`), which is
+    /// not UI-reachable here because the only entry to a non-app
+    /// LabelerProfileScreen is the hub, and the hub lists only already-
+    /// subscribed labelers.
     @MainActor
     func testLabelerSubscriptionStateRecon() throws {
         let creds = try requireCredentials()
@@ -257,13 +333,18 @@ final class RemainingScreensGateUITests: XCTestCase {
         }
         harness.screenshot(screen: "0066-moderation-advanced")
 
-        if harness.app.staticTexts["No subscribed labelers"].exists {
-            let note = XCTAttachment(string: "NO SUBSCRIBED LABELERS — labelersPref empty; LabelerProfileScreen unreachable on this account")
-            note.name = "labelers-empty"
-            note.lifetime = .keepAlways
-            add(note)
-            return
-        }
+        // Post-#0202 the hub always resolves the implicit Bluesky Moderation
+        // Service even with an empty labelersPref, so "No subscribed labelers"
+        // should be unreachable. Record it if it ever shows (would be a #0202
+        // regression) but don't fail the read-only recon on it.
+        XCTAssertFalse(
+            harness.app.staticTexts["No subscribed labelers"].exists,
+            "#0202 regression: hub shows 'No subscribed labelers' — the implicit Bluesky Moderation Service did not resolve"
+        )
+        XCTAssertTrue(
+            harness.app.staticTexts["Bluesky Moderation Service"].firstMatch.exists,
+            "Implicit Bluesky Moderation Service (app labeler) not listed under Advanced"
+        )
 
         // Tap the first labeler row (a NavigationLink cell inside Advanced).
         // Labeler rows are the only NavigationLinks after the "Advanced"
@@ -290,14 +371,31 @@ final class RemainingScreensGateUITests: XCTestCase {
 
         let subscribe = harness.app.buttons["Subscribe"].firstMatch
         let unsubscribe = harness.app.buttons["Unsubscribe"].firstMatch
-        XCTAssertTrue(
-            subscribe.exists || unsubscribe.exists,
-            "Neither Subscribe nor Unsubscribe button present on the labeler profile"
-        )
-        let state = XCTAttachment(string: "labeler button shows: \(unsubscribe.exists ? "Unsubscribe (correct)" : "Subscribe (WRONG for a subscribed labeler)")")
-        state.name = "labeler-subscription-state"
-        state.lifetime = .keepAlways
-        add(state)
+        let isAppLabeler = harness.app.staticTexts["Bluesky Moderation Service"].firstMatch.exists
+
+        if isAppLabeler {
+            // #0202: the app labeler is always-on; its subscribe button is
+            // hidden (it can't be subscribed/unsubscribed).
+            XCTAssertFalse(
+                subscribe.exists || unsubscribe.exists,
+                "#0202 regression: the Bluesky Moderation Service (app labeler) profile must HIDE the Subscribe/Unsubscribe button"
+            )
+            let note = XCTAttachment(string: "APP LABELER (Bluesky Moderation Service): subscribe button correctly hidden — #0202 isAppLabeler parity. labelersPref empty (account standard state).")
+            note.name = "labeler-subscription-state"
+            note.lifetime = .keepAlways
+            add(note)
+        } else {
+            // A non-app labeler reached from the hub is, by construction, in
+            // labelersPref — its button must read Unsubscribe (#0202 read path).
+            XCTAssertTrue(
+                unsubscribe.exists,
+                "A hub-listed (labelersPref) labeler must show Unsubscribe, not Subscribe (#0202 read path)"
+            )
+            let state = XCTAttachment(string: "NON-APP LABELER: button shows Unsubscribe (correct — sourced from labelersPref).")
+            state.name = "labeler-subscription-state"
+            state.lifetime = .keepAlways
+            add(state)
+        }
     }
 
     // MARK: - Lists (create → open → delete, fully reversed)
