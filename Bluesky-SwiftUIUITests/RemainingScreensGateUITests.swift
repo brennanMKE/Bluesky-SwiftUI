@@ -385,6 +385,139 @@ final class RemainingScreensGateUITests: XCTestCase {
         harness.screenshot(screen: "0203-lists-after-delete")
     }
 
+    /// #0204 live leg: full list-member management round-trip, fully
+    /// reversed. Creates "UITest-0204 List", opens the People tab, adds ONE
+    /// member (bsky.app — a stable, well-known handle; adding to a private
+    /// curate list does not notify them) through the "Add people" search
+    /// sheet, confirms the member renders in the People tab, swipe-removes
+    /// it, confirms the empty state returns, then deletes the list. The
+    /// account ends with zero lists and zero listitem records.
+    @MainActor
+    func testListMemberAddRemove0204() throws {
+        let creds = try requireCredentials()
+        let listName = "UITest-0204 List"
+        let memberHandle = "bsky.app"
+
+        launchToProfileMenuItem("My Lists", creds: creds)
+        XCTAssertTrue(waitForScreenTitled("Lists"), "Lists screen did not push from the profile menu")
+
+        // Create the scratch list — unless a previous interrupted run left
+        // one behind, in which case resume against it (the cleanup phases
+        // below fully reverse it either way).
+        let row = harness.app.staticTexts[listName].firstMatch
+        if !row.waitForExistence(timeout: 5) {
+            let add = harness.app.navigationBars.buttons["Add"].firstMatch.exists
+                ? harness.app.navigationBars.buttons["Add"].firstMatch
+                : harness.app.buttons["Add"].firstMatch
+            XCTAssertTrue(add.waitForExistence(timeout: 8), "Create (+) button missing from the Lists toolbar")
+            add.tap()
+            XCTAssertTrue(waitForScreenTitled("New List"), "New List sheet did not present")
+            let nameField = harness.app.textFields["Name"].firstMatch
+            XCTAssertTrue(nameField.waitForExistence(timeout: 8), "Name field missing on the New List sheet")
+            nameField.tap()
+            nameField.typeText(listName)
+            harness.app.buttons["Create"].firstMatch.tap()
+            XCTAssertTrue(row.waitForExistence(timeout: 10), "Created list did not appear in the Lists hub")
+        }
+
+        // Open the detail and switch to the People tab.
+        row.tap()
+        XCTAssertTrue(waitForScreenTitled(listName), "List detail did not push")
+        let peopleTab = harness.app.buttons["People"].firstMatch
+        XCTAssertTrue(peopleTab.waitForExistence(timeout: 8), "People tab missing on the curate list detail")
+        peopleTab.tap()
+
+        // Add phase — skipped when resuming after an interrupted run that
+        // already created the membership record.
+        let memberRow = harness.app.staticTexts["@\(memberHandle)"].firstMatch
+        if !memberRow.waitForExistence(timeout: 5) {
+            // Empty state offers the owner the "Start adding people!" CTA (#0204).
+            let emptyCTA = element("list-add-people-empty")
+            XCTAssertTrue(emptyCTA.waitForExistence(timeout: 10), "#0204: 'Start adding people!' affordance missing from the empty People tab")
+            harness.screenshot(screen: "0204-people-empty-with-cta")
+            emptyCTA.tap()
+
+            // Add-people sheet: search the stable handle and add it.
+            let searchField = harness.app.searchFields.firstMatch
+            XCTAssertTrue(searchField.waitForExistence(timeout: 8), "Search field missing on the Add people sheet")
+            searchField.tap()
+            searchField.typeText(memberHandle)
+            let addButton = element("list-add-member-\(memberHandle)")
+            XCTAssertTrue(addButton.waitForExistence(timeout: 15), "Typeahead result for \(memberHandle) did not surface an Add button")
+            harness.screenshot(screen: "0204-add-sheet-results")
+            addButton.tap()
+
+            // The row's button flips to Remove once the listitem record exists.
+            let removeToggle = element("list-remove-member-\(memberHandle)")
+            XCTAssertTrue(removeToggle.waitForExistence(timeout: 10), "Add did not flip to Remove — createRecord likely failed")
+            harness.screenshot(screen: "0204-add-sheet-added")
+
+            // Dismiss the sheet. While search is active the collapsed
+            // navigation bar shows only the search field plus an X
+            // ("Close") that exits search; the Done toolbar item only
+            // reappears after search ends.
+            let sheetBar = harness.app.navigationBars["Add people to list"]
+            let closeSearch = harness.app.buttons["Close"].firstMatch
+            if closeSearch.exists && closeSearch.isHittable { closeSearch.tap() }
+            let done = element("list-add-member-done")
+            if done.waitForExistence(timeout: 5), done.isHittable {
+                done.tap()
+            } else if harness.app.buttons["Done"].firstMatch.exists {
+                harness.app.buttons["Done"].firstMatch.tap()
+            }
+            let dismissDeadline = Date().addingTimeInterval(8)
+            while Date() < dismissDeadline, sheetBar.exists {
+                usleep(250_000)
+            }
+            if sheetBar.exists {
+                let tree = XCTAttachment(string: harness.app.debugDescription)
+                tree.name = "ui-tree-at-dismiss-failure"
+                tree.lifetime = .keepAlways
+                add(tree)
+                XCTFail("Add people sheet did not dismiss")
+            }
+
+            // The member renders in the People tab immediately (optimistic insert).
+            XCTAssertTrue(memberRow.waitForExistence(timeout: 10), "Added member did not render in the People tab")
+        }
+        XCTAssertTrue(element("list-add-people").exists, "Owner 'Add people' header affordance missing above the member rows")
+        harness.screenshot(screen: "0204-people-with-member")
+
+        // Remove via the swipe action — full reversal of the listitem record.
+        let memberCell = cellContaining("@\(memberHandle)")
+        XCTAssertTrue(memberCell.waitForExistence(timeout: 5), "Member cell not found for swipe-to-remove")
+        memberCell.swipeLeft()
+        let remove = harness.app.buttons["Remove"].firstMatch
+        XCTAssertTrue(remove.waitForExistence(timeout: 5), "Swipe Remove action did not appear on the member row")
+        remove.tap()
+
+        let removeDeadline = Date().addingTimeInterval(10)
+        while Date() < removeDeadline, harness.app.staticTexts["@\(memberHandle)"].exists {
+            usleep(250_000)
+        }
+        XCTAssertFalse(harness.app.staticTexts["@\(memberHandle)"].exists, "Member row still present after remove")
+        XCTAssertTrue(
+            harness.app.staticTexts["No Members"].waitForExistence(timeout: 8),
+            "People tab did not return to the empty state after removing the member"
+        )
+        harness.screenshot(screen: "0204-people-after-remove")
+
+        // Delete the scratch list from the hub — account back to zero lists.
+        XCTAssertTrue(popBack(), "Could not pop back to the Lists hub")
+        let cell = cellContaining(listName)
+        XCTAssertTrue(cell.waitForExistence(timeout: 8), "List cell not found for swipe-to-delete")
+        cell.swipeLeft()
+        let delete = harness.app.buttons["Delete"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "Swipe Delete action did not appear on the list row")
+        delete.tap()
+        let deleteDeadline = Date().addingTimeInterval(10)
+        while Date() < deleteDeadline, harness.app.staticTexts[listName].exists {
+            usleep(250_000)
+        }
+        XCTAssertFalse(harness.app.staticTexts[listName].exists, "List row still present after delete")
+        harness.screenshot(screen: "0204-lists-after-cleanup")
+    }
+
     /// Continuation / cleanup for `testListsCreateOpenDelete`: that test's
     /// create step succeeds server-side, but the hub re-fetches `getLists`
     /// once, immediately, racing AppView indexing — so the new row never
