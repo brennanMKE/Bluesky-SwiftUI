@@ -8,7 +8,7 @@
 # Usage:
 #   ./screenshots-all.sh
 #
-# The script assumes the Bluesky Beta app is already running.
+# The script assumes the Beta build of Bluesky is already running.
 # Build it first:
 #   ./scripts/set-environment.sh Beta
 #   xcodebuild -scheme "Bluesky (Beta)" -configuration Debug build

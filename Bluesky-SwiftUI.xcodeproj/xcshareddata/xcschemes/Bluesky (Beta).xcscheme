@@ -15,7 +15,7 @@
                   <BuildableReference
                      BuildableIdentifier = "primary"
                      BlueprintIdentifier = "26652AC82F9B150300646A0F"
-                     BuildableName = "Bluesky Beta.app"
+                     BuildableName = "Bluesky.app"
                      BlueprintName = "Bluesky-SwiftUI"
                      ReferencedContainer = "container:Bluesky-SwiftUI.xcodeproj">
                   </BuildableReference>
@@ -33,7 +33,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "26652AC82F9B150300646A0F"
-               BuildableName = "Bluesky Beta.app"
+               BuildableName = "Bluesky.app"
                BlueprintName = "Bluesky-SwiftUI"
                ReferencedContainer = "container:Bluesky-SwiftUI.xcodeproj">
             </BuildableReference>
@@ -67,7 +67,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "26652AC82F9B150300646A0F"
-            BuildableName = "Bluesky Beta.app"
+            BuildableName = "Bluesky.app"
             BlueprintName = "Bluesky-SwiftUI"
             ReferencedContainer = "container:Bluesky-SwiftUI.xcodeproj">
          </BuildableReference>
@@ -84,7 +84,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "26652AC82F9B150300646A0F"
-            BuildableName = "Bluesky Beta.app"
+            BuildableName = "Bluesky.app"
             BlueprintName = "Bluesky-SwiftUI"
             ReferencedContainer = "container:Bluesky-SwiftUI.xcodeproj">
          </BuildableReference>
