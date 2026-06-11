@@ -15,6 +15,14 @@ struct Bluesky_SwiftUIApp: App {
     /// Stored as a property so ARC keeps it alive for the lifetime of the app.
     private let pushDelegate = PushNotificationDelegate()
 
+    #if os(iOS)
+    /// Receives the APNs device token (#0030). UIKit only delivers
+    /// `didRegisterForRemoteNotificationsWithDeviceToken` to the app
+    /// delegate, so a minimal adaptor is required even under the SwiftUI
+    /// lifecycle. See `PushAppDelegate` in `PushRouter.swift`.
+    @UIApplicationDelegateAdaptor(PushAppDelegate.self) private var pushAppDelegate
+    #endif
+
     @State private var session: SessionManager?
     @State private var environment: BlueskyEnvironment?
     /// Timeline feed store created in boot() and pre-loading before views appear.

@@ -29,10 +29,13 @@ struct MainTabView: View {
     @State private var messageBadge = 0
     @State private var notificationBadge = 0
     @State private var threadURI: ATURI?
-    /// DID of a profile opened via push notification routing.
-    @State private var pushProfileDID: String?
     /// DID of a profile to navigate to from feed/thread author taps.
     @State private var feedProfileDID: DID?
+    /// Push-notification destinations parked while a tab switch is in flight
+    /// (#0030). `resetTransientNavState` — which runs on every tab change and
+    /// would otherwise wipe the destination — consumes these after the reset.
+    @State private var pendingPushThreadURI: ATURI?
+    @State private var pendingPushProfileDID: DID?
     @State private var showComposer = false
     @State private var showModeration = false
     @State private var showSettings = false
@@ -96,11 +99,15 @@ struct MainTabView: View {
         #if os(macOS)
         macOSSidebar
             .onOpenURL { handleDeepLink($0) }
-            .onReceive(NotificationCenter.default.publisher(for: .openPostThread)) { note in
-                handlePushPostThread(note)
+            .onReceive(NotificationCenter.default.publisher(for: .pushRouteReceived)) { _ in
+                applyPendingPushRoute()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .openProfile)) { note in
-                handlePushProfile(note)
+            .task {
+                // Cold start from a notification tap: the delegate may have
+                // buffered a route before this view mounted.
+                applyPendingPushRoute()
+                await PushRouteDispatcher.simulateTapFromEnvironmentIfRequested()
+                applyPendingPushRoute()
             }
             .overlay(alignment: .top) {
                 OfflineBanner(state: offlineBannerState)
@@ -118,11 +125,22 @@ struct MainTabView: View {
         #else
         adaptiveLayout
             .onOpenURL { handleDeepLink($0) }
-            .onReceive(NotificationCenter.default.publisher(for: .openPostThread)) { note in
-                handlePushPostThread(note)
+            .onReceive(NotificationCenter.default.publisher(for: .pushRouteReceived)) { _ in
+                applyPendingPushRoute()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .openProfile)) { note in
-                handlePushProfile(note)
+            .task {
+                // Cold start from a notification tap: the delegate may have
+                // buffered a route before this view mounted.
+                applyPendingPushRoute()
+                await PushRouteDispatcher.simulateTapFromEnvironmentIfRequested()
+                applyPendingPushRoute()
+            }
+            // #0030: once a session is active, obtain the APNs token and
+            // register it with Bluesky's notification gateway. Re-runs when
+            // the signed-in account changes.
+            .task(id: session.currentAccount?.did) {
+                guard session.currentAccount != nil else { return }
+                PushRegistrationCoordinator.shared.activate(network: env.network)
             }
             .overlay(alignment: .top) {
                 OfflineBanner(state: offlineBannerState)
@@ -157,17 +175,40 @@ struct MainTabView: View {
 
     // MARK: - Push notification routing
 
-    private func handlePushPostThread(_ note: Foundation.Notification) {
-        guard let uriString = note.object as? String else { return }
-        let uri = ATURI(rawValue: uriString)
-        selectedTab = .home
-        threadURI = uri
+    /// Consumes the route buffered by `PushRouteDispatcher` (#0030) and maps
+    /// it onto the app's navigation state. Threads and profiles land on the
+    /// Home tab's stack — RN parity: `useNotificationHandler` navigates
+    /// `HomeTab` for post/profile URLs and `resetToTab` for the
+    /// notifications fallback.
+    private func applyPendingPushRoute() {
+        guard let route = PushRouteDispatcher.consumePendingRoute() else { return }
+        switch route {
+        case .postThread(let uri):
+            routePushDestination(thread: uri, profile: nil)
+        case .profile(let did):
+            routePushDestination(thread: nil, profile: did)
+        case .conversation, .messagesInbox:
+            // ConversationListScreen has no external "open this convo" entry
+            // point yet, so both chat routes land on the Messages inbox.
+            selectedTab = .messages
+        case .notificationsTab:
+            selectedTab = .notifications
+        }
     }
 
-    private func handlePushProfile(_ note: Foundation.Notification) {
-        guard let did = note.object as? String, !did.isEmpty else { return }
-        pushProfileDID = did
-        selectedTab = .profile
+    /// Routes a push destination onto the Home tab. When a tab switch is
+    /// needed, the destination is parked in `pendingPushThreadURI` /
+    /// `pendingPushProfileDID` because the switch triggers
+    /// `resetTransientNavState`, which would clear a directly-set value.
+    private func routePushDestination(thread: ATURI?, profile: DID?) {
+        if selectedTab == .home {
+            if let thread { threadURI = thread }
+            if let profile { feedProfileDID = profile }
+        } else {
+            pendingPushThreadURI = thread
+            pendingPushProfileDID = profile
+            selectedTab = .home
+        }
     }
 
     /// Clears per-tab navigation state when the user switches tabs so stale
@@ -186,6 +227,21 @@ struct MainTabView: View {
         showNotificationSettings = false
         notificationFeedURI = nil
         notificationStarterPackURI = nil
+
+        // #0030: a push-notification route that required a tab switch parked
+        // its destination above; apply it after the reset, deferred one tick
+        // so the freshly-recreated NavigationStack (`.id(selectedTab)`)
+        // exists before its destination binding fires.
+        if pendingPushThreadURI != nil || pendingPushProfileDID != nil {
+            let thread = pendingPushThreadURI
+            let profile = pendingPushProfileDID
+            pendingPushThreadURI = nil
+            pendingPushProfileDID = nil
+            Task { @MainActor in
+                if let thread { threadURI = thread }
+                if let profile { feedProfileDID = profile }
+            }
+        }
     }
 
     // MARK: - macOS sidebar (NavigationSplitView)
