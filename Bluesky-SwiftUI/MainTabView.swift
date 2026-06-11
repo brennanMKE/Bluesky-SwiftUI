@@ -521,6 +521,7 @@ struct MainTabView: View {
                 .accessibilityLabel(tab.title)
             }
         }
+        .padding(.horizontal, 8) // RN: BottomBarStyles `bottomBar` paddingLeft/Right = tokens.space.sm (8)
         .frame(height: 49)
         .background(
             theme.colors.background
@@ -529,27 +530,39 @@ struct MainTabView: View {
                         .fill(theme.colors.border)
                         .frame(height: 0.5)
                 }
+                // RN's bar is opaque through the home-indicator region
+                // (paddingBottom: clamp(insets.bottom, 15, 60)); without
+                // this, feed content shows through below the bar.
+                .ignoresSafeArea(edges: .bottom)
         )
     }
 
     @ViewBuilder
     private func iosTabBarLabel(for tab: AppTab, isActive: Bool) -> some View {
-        let tint = isActive ? theme.colors.link : theme.colors.textSecondary
+        // RN parity (BottomBar.tsx): every glyph renders in the primary text
+        // color in both states — selection is conveyed by the filled icon
+        // variant (and, for Profile, the hairline ring), not by a tint change.
+        let tint = theme.colors.textPrimary
         switch tab {
         case .profile:
+            // RN draws the avatar at `iconWidth - 2` (26pt) normally and
+            // `iconWidth - 3` (25pt) when selected, inside a circular wrapper
+            // with a 1px border (transparent when inactive, text-colored when
+            // active), so the slot's footprint stays at the shared 28pt icon
+            // size in both states.
             ZStack {
                 AvatarView(
                     url: viewerAvatarURL,
                     handle: session.currentAccount?.handle.rawValue ?? "?",
-                    size: 28
+                    size: isActive ? 25 : 26
                 )
                 if isActive {
                     Circle()
-                        .strokeBorder(theme.colors.link, lineWidth: 2)
-                        .frame(width: 30, height: 30)
+                        .strokeBorder(theme.colors.textPrimary, lineWidth: 1)
+                        .frame(width: 27, height: 27)
                 }
             }
-            .frame(width: 30, height: 30)
+            .frame(width: 28, height: 28)
         default:
             Image(systemName: iosTabIcon(for: tab, isActive: isActive))
                 .font(.system(size: 24, weight: .regular))
