@@ -306,6 +306,81 @@ final class NotificationsUITests: XCTestCase {
         )
     }
 
+    // MARK: - Pull-to-refresh (#0031)
+
+    /// Launches onto Notifications with credentials when the environment
+    /// provides them, otherwise rides the simulator's existing live session
+    /// (the app skips programmatic sign-in when a session restores). Used by
+    /// the Module 10 gate validation (#0031), which runs against the
+    /// signed-in beta app without forwarding credentials. Skips when neither
+    /// path yields a logged-in shell.
+    @discardableResult
+    private func launchOntoNotificationsAnySession() throws -> XCUIElement {
+        if let creds = BlueskyUITestHarness.credentialsFromEnvironment() {
+            return launchOntoNotifications(creds: creds)
+        }
+        harness.app.launchEnvironment["BLUESKY_UI_TEST_SCRIPT"] =
+            BlueskyUITestHarness.encode([.notifications])
+        harness.app.launch()
+        guard harness.waitForMainTabView() else {
+            throw XCTSkip("No credentials in the environment and no existing session on the simulator — cannot reach the Notifications screen.")
+        }
+        harness.assertNoScriptError()
+        dismissPushPermissionAlertIfPresent()
+        let screen = element("notifications-screen")
+        XCTAssertTrue(
+            screen.waitForExistence(timeout: 15),
+            "notifications-screen did not appear after selecting the Notifications tab"
+        )
+        return screen
+    }
+
+    /// First launch after a fresh install raises the system push-permission
+    /// alert, which intercepts synthesized gestures. Decline it (conservative:
+    /// no server-side push registration) so the drag reaches the list.
+    private func dismissPushPermissionAlertIfPresent() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let dontAllow = springboard.buttons["Don’t Allow"]
+        let dontAllowPlain = springboard.buttons["Don't Allow"]
+        if dontAllow.waitForExistence(timeout: 3), dontAllow.isHittable {
+            dontAllow.tap()
+        } else if dontAllowPlain.exists, dontAllowPlain.isHittable {
+            dontAllowPlain.tap()
+        }
+    }
+
+    /// Pull-to-refresh: dragging the list down past its top edge triggers the
+    /// `.refreshable` modifier (`NotificationsStore.refresh`, a fresh
+    /// `listNotifications` page). In-process the test asserts the gesture
+    /// completes, the screen stays mounted, and the list re-populates; the
+    /// actual refetch is observable out-of-process via the store's os_log line
+    /// ("notifications refresh: fetched …"). (#0031)
+    @MainActor
+    func testPullToRefreshKeepsListPopulated() throws {
+        try launchOntoNotificationsAnySession()
+
+        guard waitForAnyNotificationCell() else {
+            throw XCTSkip("No notification-cell appeared — cannot pull-to-refresh an empty list.")
+        }
+
+        // Drag from the first cell well past the top edge — the SwiftUI
+        // refresh control needs a long, slow-ish pull to arm.
+        let first = notificationCells().element(boundBy: 0)
+        let start = first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = start.withOffset(CGVector(dx: 0, dy: 500))
+        start.press(forDuration: 0.1, thenDragTo: end)
+
+        // The screen survives the refresh and the list re-populates.
+        XCTAssertTrue(
+            element("notifications-screen").waitForExistence(timeout: 8),
+            "notifications-screen disappeared after pull-to-refresh"
+        )
+        XCTAssertTrue(
+            waitForAnyNotificationCell(timeout: 12),
+            "notification cells did not re-appear after pull-to-refresh"
+        )
+    }
+
     // MARK: - Tap routing
 
     /// Tapping a like/repost notification navigates to the subject thread
