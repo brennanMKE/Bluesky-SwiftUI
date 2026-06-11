@@ -102,8 +102,16 @@ final class UITestNavigatorTests: XCTestCase {
         let app = harness.app
         app.launchEnvironment["BLUESKY_UI_TEST_SCRIPT"] = "{ this is not valid json"
         app.launch()
+        // macOS: the launched app can come up without its window key/active, in
+        // which case XCUITest sees only the menu bar and the window content is
+        // absent from the accessibility tree. Bring it to the foreground so the
+        // WindowGroup content is realized and queryable.
+        app.activate()
+        // Match by identifier across any element type: SwiftUI surfaces the
+        // error element as a `staticText` on iOS but as a generic element on
+        // macOS, so a `staticTexts[...]` query alone misses it there.
         XCTAssertTrue(
-            app.staticTexts["ui-test-driver-error"].waitForExistence(timeout: 20),
+            element("ui-test-driver-error").waitForExistence(timeout: 20),
             "ui-test-driver-error label was not readable after a decode failure"
         )
     }

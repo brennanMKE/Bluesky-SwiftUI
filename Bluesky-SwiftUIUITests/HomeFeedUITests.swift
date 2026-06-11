@@ -156,14 +156,11 @@ final class HomeFeedUITests: XCTestCase {
         let before = postCellCount()
         XCTAssertGreaterThan(before, 0, "Expected at least one post cell before switching tabs")
 
-        // Switch away to Search, then back to Home, via the tab bar.
-        let searchTab = harness.app.buttons["Search"].firstMatch
-        XCTAssertTrue(searchTab.waitForExistence(timeout: 5), "Search tab not found")
-        searchTab.tap()
-
-        let homeTab = harness.app.buttons["Home"].firstMatch
-        XCTAssertTrue(homeTab.waitForExistence(timeout: 5), "Home tab not found")
-        homeTab.tap()
+        // Switch away to Search, then back to Home. `tapTab` resolves the
+        // destination on either shell — iOS tab-bar `Button`s or macOS sidebar
+        // `cells` — so this dup-guard runs unchanged on both platforms.
+        XCTAssertTrue(harness.tapTab("Search"), "Search tab not found")
+        XCTAssertTrue(harness.tapTab("Home"), "Home tab not found")
 
         // Allow the feed to settle back onto Home.
         XCTAssertTrue(

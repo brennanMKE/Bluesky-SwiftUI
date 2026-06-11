@@ -43,7 +43,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		26652AC92F9B150300646A0F /* Bluesky.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bluesky.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		26652AC92F9B150300646A0F /* Bluesky Beta.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Bluesky Beta.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		26652AD62F9B150500646A0F /* Bluesky-SwiftUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Bluesky-SwiftUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		26652AE02F9B150500646A0F /* Bluesky-SwiftUIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Bluesky-SwiftUIUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		26652B242F9B2A4D00646A0F /* Build.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Build.xcconfig; sourceTree = "<group>"; };
@@ -135,7 +135,7 @@
 		26652ACA2F9B150300646A0F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				26652AC92F9B150300646A0F /* Bluesky.app */,
+				26652AC92F9B150300646A0F /* Bluesky Beta.app */,
 				26652AD62F9B150500646A0F /* Bluesky-SwiftUITests.xctest */,
 				26652AE02F9B150500646A0F /* Bluesky-SwiftUIUITests.xctest */,
 			);
@@ -188,7 +188,7 @@
 				26652B442F9B266400646A0F /* BlueskyOnboarding */,
 			);
 			productName = "Bluesky-SwiftUI";
-			productReference = 26652AC92F9B150300646A0F /* Bluesky.app */;
+			productReference = 26652AC92F9B150300646A0F /* Bluesky Beta.app */;
 			productType = "com.apple.product-type.application";
 		};
 		26652AD52F9B150500646A0F /* Bluesky-SwiftUITests */ = {
@@ -592,10 +592,10 @@
 		26652AF12F9B150500646A0F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				CODE_SIGN_ENTITLEMENTS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "co.sstools.Bluesky-SwiftUIUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -610,10 +610,10 @@
 		26652AF22F9B150500646A0F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				CODE_SIGN_ENTITLEMENTS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "co.sstools.Bluesky-SwiftUIUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
