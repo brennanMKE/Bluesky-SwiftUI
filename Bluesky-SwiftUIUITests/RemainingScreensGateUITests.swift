@@ -3,9 +3,10 @@
 // Module 15 gate live validation on iPhone (#0066): Lists, Starter Packs,
 // Saved Feeds, Video Feed, Labeler Profile, App Passwords, Bookmarks.
 //
-// Two of the seven screens (Video Feed, Starter Packs hub/create) have no
-// entry point in the iOS shell, so they are validated by code analysis in the
-// gate issue rather than here. The remaining five are covered by:
+// Starter Packs hub/create still has no entry point in the iOS shell (#0206),
+// so it is validated by code analysis in the gate issue rather than here.
+// Video Feed gained its entry point in #0205 and is covered by
+// `testVideoFeedFromTrendingVideosInterstitial0205`. The others:
 //
 //   • testSavedFeedsServerStateRecon  — READ-ONLY: My Feeds screen state
 //     (server savedFeedsPrefV2 truth) + screenshots. No putPreferences writes
@@ -165,6 +166,66 @@ final class RemainingScreensGateUITests: XCTestCase {
         // Scroll once for the Discover section evidence.
         harness.app.swipeUp()
         harness.screenshot(screen: "0066-myfeeds-recon-discover")
+    }
+
+    // MARK: - Video Feed (#0205, read-only)
+
+    /// READ-ONLY: validates the immersive Video Feed entry point added by
+    /// #0205. The Discover tab renders the "Trending Videos" interstitial
+    /// after its 15th post (RN parity: `PostFeed.tsx` `sliceIndex === 15`);
+    /// tapping a compact video card pushes `VideoFeedView` seeded at the
+    /// tapped post. The test scrolls Discover until the interstitial is
+    /// instantiated, taps the first card, and asserts the video feed surface
+    /// mounts. No likes/reposts are performed from the video feed.
+    @MainActor
+    func testVideoFeedFromTrendingVideosInterstitial0205() throws {
+        let creds = try requireCredentials()
+        harness.launch(script: [.home, .waitForFeedLoad(minPosts: 1)], handle: creds.handle, password: creds.password)
+        XCTAssertTrue(harness.waitForMainTabView(), "MainTabView did not appear")
+        harness.assertNoScriptError()
+
+        // Switch the home pager to the Discover tab via the feed strip.
+        let discoverTab = harness.app.buttons["Discover"].firstMatch
+        XCTAssertTrue(discoverTab.waitForExistence(timeout: 10), "Discover tab missing from the home feed strip")
+        discoverTab.tap()
+        sleep(4) // let the Discover feed load its first page
+
+        // The interstitial sits after the 15th post in a LazyVStack — swipe
+        // until it is instantiated (it begins loading its own rail then).
+        let interstitial = element("trending-videos-interstitial")
+        var swipes = 0
+        while !interstitial.exists && swipes < 16 {
+            harness.app.swipeUp()
+            usleep(300_000)
+            swipes += 1
+        }
+        if !interstitial.exists {
+            // Failure diagnostics: capture where the scroll actually landed.
+            harness.screenshot(screen: "0205-debug-after-swipes")
+        }
+        XCTAssertTrue(interstitial.waitForExistence(timeout: 10), "Trending Videos interstitial never appeared in Discover after \(swipes) swipes")
+
+        // Give the rail a moment to fetch the video feed, then make sure a
+        // card is actually on screen for the tap.
+        let card = element("trending-video-card")
+        XCTAssertTrue(card.waitForExistence(timeout: 15), "No trending video card rendered in the interstitial")
+        var nudges = 0
+        while !card.isHittable && nudges < 4 {
+            // Gentle scroll so the rail lands fully in the viewport rather
+            // than a full-page swipe that flings it past the fold.
+            harness.app.swipeUp(velocity: .slow)
+            usleep(500_000)
+            nudges += 1
+        }
+        harness.screenshot(screen: "0205-trending-videos-interstitial")
+
+        card.tap()
+        let videoFeed = element("video-feed-screen")
+        XCTAssertTrue(videoFeed.waitForExistence(timeout: 15), "video-feed-screen did not push after tapping a trending video card")
+        // Let the seeded page's HLS stream spin up before the evidence shot.
+        sleep(5)
+        harness.screenshot(screen: "0205-video-feed")
+        popBack()
     }
 
     // MARK: - Labeler Profile (read-only recon)

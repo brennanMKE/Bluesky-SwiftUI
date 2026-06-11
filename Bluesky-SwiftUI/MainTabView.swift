@@ -107,6 +107,12 @@ struct MainTabView: View {
     /// a `starterpack-joined` notification row (#0062). Drives a
     /// `StarterPackScreen` push from the Notifications tab.
     @State private var notificationStarterPackURI: ATURI?
+    /// Entry into the immersive video feed (#0205). Set by a tap on a card
+    /// in the Discover tab's "Trending Videos" interstitial (RN: the
+    /// `VideoFeed` route, navigated to from `CompactVideoPostCard`), or by
+    /// the `openVideoFeed` UI-test intent. Drives a `VideoFeedView` push on
+    /// the Home tab.
+    @State private var videoFeedEntry: VideoFeedEntry?
 
     var body: some View {
         #if os(macOS)
@@ -142,7 +148,8 @@ struct MainTabView: View {
                 showSettings: $showSettings,
                 showComposer: $showComposer,
                 showModeration: $showModeration,
-                showBookmarks: $showBookmarks
+                showBookmarks: $showBookmarks,
+                videoFeedEntry: $videoFeedEntry
             ))
         #else
         adaptiveLayout
@@ -184,7 +191,8 @@ struct MainTabView: View {
                 showSettings: $showSettings,
                 showComposer: $showComposer,
                 showModeration: $showModeration,
-                showBookmarks: $showBookmarks
+                showBookmarks: $showBookmarks,
+                videoFeedEntry: $videoFeedEntry
             ))
         #endif
     }
@@ -258,6 +266,7 @@ struct MainTabView: View {
         showNotificationSettings = false
         notificationFeedURI = nil
         notificationStarterPackURI = nil
+        videoFeedEntry = nil
 
         // #0030: a push-notification route that required a tab switch parked
         // its destination above; apply it after the reset, deferred one tick
@@ -737,7 +746,19 @@ struct MainTabView: View {
                 cache: env.cache,
                 bookmarks: env.bookmarks,
                 onPostTap: { post in threadURI = post.uri },
-                onAuthorTap: { profile in feedProfileDID = profile.did }
+                onAuthorTap: { profile in feedProfileDID = profile.did },
+                // #0205: Trending Videos interstitial (Discover tab) →
+                // immersive video feed, seeded at the tapped post (RN:
+                // `CompactVideoPostCard` navigates to the `VideoFeed` route
+                // with `initialPostUri`).
+                onTrendingVideoTap: { post in
+                    videoFeedEntry = VideoFeedEntry(initialPostURI: post.uri.rawValue)
+                },
+                // #0205: the interstitial's "View more" card opens the video
+                // feed generator's timeline (RN: `makeCustomFeedLink`).
+                onTrendingVideosViewMore: {
+                    openCustomFeedURI = ATURI(rawValue: VideoFeedView.videoFeedURI)
+                }
             )
             .navigationDestination(item: $threadURI) { uri in
                 ThreadView(
@@ -780,6 +801,22 @@ struct MainTabView: View {
                     network: env.network,
                     onPostTap: { post in threadURI = post.uri },
                     onAuthorTap: { profile in feedProfileDID = profile.did }
+                )
+            }
+            // #0205: immersive vertical video feed. Pushed from the Discover
+            // tab's Trending Videos interstitial (and the `openVideoFeed`
+            // UI-test intent); always backed by the `thevids` video
+            // algorithm feed, mirroring RN's `VideoFeedSourceContext`
+            // (`type: 'feedgen', uri: VIDEO_FEED_URI`).
+            .navigationDestination(item: $videoFeedEntry) { entry in
+                VideoFeedView(
+                    network: env.network,
+                    accountStore: env.accounts,
+                    cache: env.cache,
+                    feedURI: VideoFeedView.videoFeedURI,
+                    initialPostURI: entry.initialPostURI,
+                    onProfileTap: { did in feedProfileDID = did },
+                    onPostTap: { post in threadURI = post.uri }
                 )
             }
             .toolbar {
@@ -874,6 +911,11 @@ struct MainTabView: View {
                     }
                 )
             }
+            #endif
+            // Custom feed timeline destination. Historically iOS-only (the
+            // My Feeds entry point), but the Trending Videos interstitial's
+            // "View more" card (#0205) routes here on both platforms, so the
+            // destination is registered unconditionally.
             .navigationDestination(item: $openCustomFeedURI) { uri in
                 CustomFeedTimelineView(
                     feedURI: uri,
@@ -885,7 +927,6 @@ struct MainTabView: View {
                     onAuthorTap: { profile in feedProfileDID = profile.did }
                 )
             }
-            #endif
             // The composer sheet is attached at the layout root on iOS
             // compact (so the floating FAB can drive it from outside any
             // tab); on macOS and iPad regular the per-tab toolbar compose
@@ -1315,6 +1356,17 @@ struct MainTabView: View {
     }
 }
 
+// MARK: - VideoFeedEntry
+
+/// Navigation payload for a push into the immersive `VideoFeedView` (#0205).
+/// Mirrors the relevant slice of RN's `VideoFeedSourceContext`: the source is
+/// always the `thevids` feedgen, and `initialPostURI` seeds the pager at the
+/// tapped post (`initialPostUri` in RN). `nil` when entry comes from the
+/// `openVideoFeed` UI-test intent, which has no tapped card.
+struct VideoFeedEntry: Hashable {
+    var initialPostURI: String?
+}
+
 // MARK: - AppTab
 
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
@@ -1379,6 +1431,7 @@ private struct UITestDriverModifier: ViewModifier {
     @Binding var showComposer: Bool
     @Binding var showModeration: Bool
     @Binding var showBookmarks: Bool
+    @Binding var videoFeedEntry: VideoFeedEntry?
 
     func body(content: Content) -> some View {
         content
@@ -1408,6 +1461,9 @@ private struct UITestDriverModifier: ViewModifier {
             .onChange(of: navigator?.shouldOpenBookmarks) { _, newValue in
                 if newValue == true { showBookmarks = true }
             }
+            .onChange(of: navigator?.shouldOpenVideoFeed) { _, newValue in
+                if newValue == true { videoFeedEntry = VideoFeedEntry(initialPostURI: nil) }
+            }
             // The `ui-test-driver-error` surface lives at the app root (see
             // `Bluesky_SwiftUIApp`) so it is readable even before login, e.g. on
             // a script decode failure. No per-screen overlay is needed here.
@@ -1421,6 +1477,7 @@ private struct UITestDriverModifier: ViewModifier {
         if navigator.shouldOpenComposer { showComposer = true }
         if navigator.shouldOpenModeration { showModeration = true }
         if navigator.shouldOpenBookmarks { showBookmarks = true }
+        if navigator.shouldOpenVideoFeed { videoFeedEntry = VideoFeedEntry(initialPostURI: nil) }
     }
 }
 

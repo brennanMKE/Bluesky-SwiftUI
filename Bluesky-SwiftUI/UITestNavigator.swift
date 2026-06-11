@@ -40,6 +40,10 @@ enum UITestIntent: Equatable, Codable {
     case openModeration
     /// Push `BookmarksScreen`.
     case openBookmarks
+    /// Push the immersive `VideoFeedView` (#0205) from the Home tab —
+    /// equivalent to tapping a card in the Discover feed's "Trending
+    /// Videos" interstitial.
+    case openVideoFeed
     /// Tap the first row in `ConversationListScreen`. No state shortcut —
     /// the harness performs the actual `XCUIElement` tap; this intent only
     /// guarantees the Messages tab is selected first.
@@ -84,6 +88,8 @@ enum UITestIntent: Equatable, Codable {
             self = .openModeration
         case "openBookmarks":
             self = .openBookmarks
+        case "openVideoFeed":
+            self = .openVideoFeed
         case "openFirstConversation":
             self = .openFirstConversation
         case "wait":
@@ -119,6 +125,8 @@ enum UITestIntent: Equatable, Codable {
             try c.encode("openModeration", forKey: .intent)
         case .openBookmarks:
             try c.encode("openBookmarks", forKey: .intent)
+        case .openVideoFeed:
+            try c.encode("openVideoFeed", forKey: .intent)
         case .openFirstConversation:
             try c.encode("openFirstConversation", forKey: .intent)
         case .wait(let seconds):
@@ -156,6 +164,9 @@ final class UITestNavigator {
     var shouldOpenComposer = false
     var shouldOpenModeration = false
     var shouldOpenBookmarks = false
+    /// Push the immersive video feed (#0205). Mirrored by `MainTabView`
+    /// into the `videoFeedEntry` navigation state on the Home tab.
+    var shouldOpenVideoFeed = false
     /// Set when `tapFirstPost` runs before the feed has loaded a post; the
     /// `run` loop resolves it against the `FeedStore` once one is available.
     var shouldTapFirstPost = false
@@ -321,6 +332,16 @@ final class UITestNavigator {
 
         case .openBookmarks:
             shouldOpenBookmarks = true
+            return true
+
+        case .openVideoFeed:
+            // Same ordering as `openSettings`: the Home tab hosts the
+            // `navigationDestination(item: $videoFeedEntry)`, so settle the
+            // tab switch (and its `resetTransientNavState()`) before raising
+            // the flag.
+            selectedTab = .home
+            await settleAfterTabSwitch()
+            shouldOpenVideoFeed = true
             return true
 
         case .openFirstConversation:
