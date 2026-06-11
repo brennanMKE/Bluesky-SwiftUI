@@ -4,18 +4,23 @@
 // (#0182), which deliberately avoids network submits, this suite performs the
 // live checks the gate issue calls for, with a strict mutation budget:
 //
-//   • exactly ONE plain-text post (which also carries the @mention and the
-//     link card so those checks ride on the same mutation), and
-//   • exactly ONE image post (which also carries the alt-text check).
+//   • test01: ONE plain-text post (also carries the @mention check and the
+//     link-card *preview* check),
+//   • test02: ONE image post (also carries the alt-text check),
+//   • test03: ONE video post,
+//   • test04: ONE two-post thread whose root carries the link-card embed
+//     (so the link-card *submit* check and the thread check share a single
+//     two-post mutation).
 //
 // Every live post starts with the marker `UITest-0064 ` so the companion
 // cleanup intent (`deleteTestPosts`, see UITestNavigator) can delete exactly
 // these posts afterwards — run `ComposerGateCleanupTests` after this suite.
+// (`listRecords` returns newest-first, so the cleanup deletes thread replies
+// before their root.)
 //
-// Video attach and thread composing are validated at the UI level WITHOUT
-// posting (mutation budget), and the draft flow is validated against the
-// current design (#0151: explicit Drafts list; the legacy per-context
-// auto-restore described in older issue text was removed deliberately).
+// The draft flow is validated against the current design (#0151: explicit
+// Drafts list; the legacy per-context auto-restore described in older issue
+// text was removed deliberately).
 //
 // Run (placeholder credentials are fine when the simulator already has a
 // signed-in keychain session — the app only uses them when no session
@@ -204,11 +209,9 @@ final class ComposerGateUITests: XCTestCase {
         harness.screenshot(screen: "0064-link-card")
         XCTAssertTrue(resolvedTitle, "link card metadata (title containing 'GitHub') did not resolve")
 
-        // Remove the URL again before submitting: posting WITH a link-card
-        // thumbnail is currently rejected by the PDS (BlobRef encodes without
-        // `$type: "blob"` — see issue #0197), and a failed submit would burn
-        // the gate's single text-post budget. The card preview evidence is
-        // already captured above.
+        // Remove the URL again before submitting so this test's single post
+        // stays embed-free: the link-card *submit* check is covered by
+        // test04's thread root (one mutation covers both gate checks).
         // The editor still has keyboard focus (don't re-tap: a tap would move
         // the caret away from the end of the text).
         textEditor.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: " https://github.com".count))
@@ -281,15 +284,17 @@ final class ComposerGateUITests: XCTestCase {
         assertPostVisibleOnOwnProfile("\(marker) image post", screenshot: "0064-image-post-in-profile")
     }
 
-    // MARK: - 03 · Video attach (no post — mutation budget)
+    // MARK: - 03 · Video post
 
-    /// Validates the iOS PhotosPicker video flow up to a successful attach
-    /// (`loadTransferable` → `VideoAttachment`). The upload/post step is NOT
-    /// exercised to keep the live account's mutations to the two posts above.
+    /// The single video post of the run. Validates the iOS PhotosPicker video
+    /// flow (`loadTransferable` → `VideoAttachment`), the preview affordances,
+    /// and a live submit carrying an `app.bsky.embed.video` blob (#0197 fix).
     @MainActor
-    func test03VideoAttachFlow() throws {
+    func test03VideoPost() throws {
         let creds = try requireCredentials()
         launchComposer(creds: creds)
+
+        type("\(marker) video post, deleted shortly", into: textEditor)
 
         let addVideo = harness.app.buttons["Add video"]
         XCTAssertTrue(addVideo.waitForExistence(timeout: 8), "Add video button not present")
@@ -304,25 +309,37 @@ final class ComposerGateUITests: XCTestCase {
         XCTAssertTrue(harness.app.buttons["Alt text"].firstMatch.exists, "video alt-text affordance missing")
         XCTAssertTrue(harness.app.buttons["Captions"].firstMatch.exists, "video captions affordance missing")
 
-        // Discard — never post the video.
-        cancelButton.tap()
-        let discard = harness.app.buttons["Discard"]
-        if discard.waitForExistence(timeout: 5) { discard.tap() }
-        XCTAssertTrue(waitGone(composerSheet, timeout: 10), "composer still present after discarding")
+        // -- Submit (video blob upload) --
+        XCTAssertTrue(waitForPostButton(enabled: true, timeout: 10), "Post button not enabled before submit")
+        guard submitAndExpectDismiss(timeout: 60, failureScreenshot: "0064-video-post-failed") else { return }
+
+        // -- Verify in profile feed --
+        assertPostVisibleOnOwnProfile("\(marker) video post", screenshot: "0064-video-post-in-profile")
     }
 
-    // MARK: - 04 · Thread composer UI (no post — mutation budget)
+    // MARK: - 04 · Thread post (2 posts) with link-card root
 
-    /// Validates the add-to-thread flow: a second editor mounts with its own
-    /// character ring and can be typed into. Submission is NOT exercised.
+    /// The single two-post mutation of the run: the root post carries the
+    /// resolved link-card embed (`app.bsky.embed.external` with thumb — the
+    /// submit half of the link-card check, unblocked by #0197), and the second
+    /// editor's text is posted as a reply to the root (the thread check).
     @MainActor
-    func test04ThreadComposerUI() throws {
+    func test04ThreadPostWithLinkCard() throws {
         let creds = try requireCredentials()
         launchComposer(creds: creds)
 
-        type("\(marker) thread check (not posted)", into: textEditor)
-        let editorsBefore = harness.app.textViews.count
+        // Root post: marker text + a URL with stable OpenGraph data.
+        type("\(marker) thread root with link card https://github.com", into: textEditor)
+        XCTAssertTrue(
+            staticTextContaining("github.com").waitForExistence(timeout: 10),
+            "link card (host line) did not appear after typing a URL"
+        )
+        XCTAssertTrue(
+            staticTextContaining("GitHub").waitForExistence(timeout: 20),
+            "link card metadata (title containing 'GitHub') did not resolve"
+        )
 
+        let editorsBefore = harness.app.textViews.count
         let addToThread = harness.app.buttons["Add to thread"]
         XCTAssertTrue(addToThread.waitForExistence(timeout: 8), "Add to thread button not present")
         addToThread.tap()
@@ -332,16 +349,20 @@ final class ComposerGateUITests: XCTestCase {
         while Date() < deadline && harness.app.textViews.count <= editorsBefore { usleep(200_000) }
         XCTAssertGreaterThan(harness.app.textViews.count, editorsBefore, "second thread editor did not appear")
 
+        // The reply text must also start with the marker so the cleanup
+        // intent matches (and deletes) it.
         let secondEditor = harness.app.textViews.element(boundBy: harness.app.textViews.count - 1)
         secondEditor.tap()
-        secondEditor.typeText("second post in thread (not posted)")
+        secondEditor.typeText("\(marker) thread reply, deleted shortly")
         harness.screenshot(screen: "0064-thread-composer")
 
-        // Discard everything.
-        cancelButton.tap()
-        let discard = harness.app.buttons["Discard"]
-        if discard.waitForExistence(timeout: 5) { discard.tap() }
-        XCTAssertTrue(waitGone(composerSheet, timeout: 10), "composer still present after discarding the thread")
+        // -- Submit (root + reply; root uploads the card thumbnail blob) --
+        XCTAssertTrue(waitForPostButton(enabled: true, timeout: 10), "Post button not enabled before submit")
+        guard submitAndExpectDismiss(timeout: 60, failureScreenshot: "0064-thread-post-failed") else { return }
+
+        // -- Verify the root in the profile feed (the reply's reply-ref is
+        //    verified server-side via the public AppView) --
+        assertPostVisibleOnOwnProfile("\(marker) thread root", screenshot: "0064-thread-post-in-profile")
     }
 
     // MARK: - 05 · Drafts: save on cancel, fresh-open empty, restore, delete
