@@ -212,6 +212,10 @@ struct Bluesky_SwiftUIApp: App {
 ///    is injected via `.blueskyTheme(_:)`. In light mode the variant is
 ///    irrelevant; in dark mode the user picks between the standard `.dark`
 ///    palette and the lower-contrast `.dim` palette.
+/// 3. `fontSize` → `.blueskyFontScale(_:)` (#0200): the tier's RN-style
+///    multiplier (XS 0.875 … M 1 … XL 1.125, see
+///    `AppearanceFontSize.scaleMultiplier`) is injected app-wide and consumed
+///    by the `BlueskyUI` content views (post cards, bodies, embeds).
 private struct AppearanceShellModifier: ViewModifier {
     @Bindable var appearance: AppearanceStore
     /// Resolved color scheme — reflects the host trait collection when
@@ -223,6 +227,7 @@ private struct AppearanceShellModifier: ViewModifier {
         content
             .preferredColorScheme(preferredScheme)
             .blueskyTheme(activeTheme)
+            .blueskyFontScale(CGFloat(appearance.fontSize.scaleMultiplier))
     }
 
     private var preferredScheme: ColorScheme? {

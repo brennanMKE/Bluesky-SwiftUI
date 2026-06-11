@@ -13,8 +13,10 @@
 //     #FFFFFF, dark bg #000000, dim bg #151D28); persistence by the segmented
 //     pickers' selection after relaunch.
 //   • Font size — XS/S/M/L/XL tier picker. Immediate effect via the preview
-//     text's measured frame; persistence via the picker selection after
-//     relaunch.
+//     text's measured frame AND the home feed's first post card, whose
+//     measured height must grow at XL (#0200 — the tier now scales app-wide
+//     typography through the blueskyFontScale environment); persistence via
+//     the picker selection after relaunch.
 //   • Content & Media — Autoplay Videos toggle.
 //   • Accessibility — Reduce Motion + Disable haptic feedback toggles.
 //   • Notifications — Likes → Push notifications channel toggle
@@ -342,9 +344,32 @@ final class SettingsGateUITests: XCTestCase {
 
     // MARK: - Font size
 
-    /// XL tier: the in-screen preview text grows immediately; the selection
-    /// survives a relaunch; a Home screenshot at XL is captured for the
-    /// app-wide font-scaling comparison. Restores M.
+    /// Walks back to the Settings root from a tab via the own-profile
+    /// overflow menu — same path as `launchToSettings` without a relaunch.
+    private func reopenSettingsFromProfileTab() {
+        XCTAssertTrue(harness.tapTab("Profile"), "Could not switch to the Profile tab")
+        let menu = element("profile-menu-button")
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "profile-menu-button missing on return to profile")
+        menu.tap()
+        let settingsItem = harness.app.buttons["Settings"].firstMatch
+        XCTAssertTrue(settingsItem.waitForExistence(timeout: 8), "Settings item missing from the profile menu")
+        settingsItem.tap()
+        XCTAssertTrue(element("settings-screen").waitForExistence(timeout: 15), "settings-screen did not reappear")
+    }
+
+    /// The home feed's first post content region (the `post-open-thread`
+    /// tappable area: author header + body text). Its measured height is the
+    /// app-wide font-scaling evidence for #0200.
+    private func firstFeedPostContent() -> XCUIElement {
+        harness.app.descendants(matching: .any)
+            .matching(identifier: "post-open-thread")
+            .firstMatch
+    }
+
+    /// XL tier: the in-screen preview text grows immediately; the home feed's
+    /// first post card grows too (#0200 — the tier scales app-wide typography,
+    /// so the M-vs-XL feed must NOT be pixel-identical); the selection
+    /// survives a relaunch. Restores M.
     @MainActor
     func testFontSizeImmediateEffectAndPersistence() throws {
         let creds = try requireCredentials()
@@ -364,30 +389,60 @@ final class SettingsGateUITests: XCTestCase {
             harness.app.swipeUp()
         }
         XCTAssertTrue(preview.waitForExistence(timeout: 5), "Font-size preview text not found")
-        let heightAtM = preview.frame.height
+        let previewHeightAtM = preview.frame.height
 
+        // Baseline for the app-wide check (#0200): measure the first feed
+        // post's content region at the M default. The FeedStore loads once at
+        // boot and tab switches don't reload it, so the same post anchors
+        // both measurements.
+        goHomeAndWaitForFeed()
+        let postAtM = firstFeedPostContent()
+        XCTAssertTrue(postAtM.waitForExistence(timeout: 10), "No post content found in the home feed at M")
+        let postLabelAtM = postAtM.label
+        let postHeightAtM = postAtM.frame.height
+        harness.screenshot(screen: "0065-home-fontsize-m")
+
+        // Back to Appearance and switch the tier to XL.
+        reopenSettingsFromProfileTab()
+        openSettingsRow("settings-appearance-row", waitForTitle: "Appearance")
         guard let fontSizeAgain = segmentedControl(uniqueSegment: "XS") else {
-            XCTFail("Font Size picker disappeared after scrolling"); return
+            XCTFail("Font Size picker not found on return to Appearance"); return
         }
         select(segment: "XL", in: fontSizeAgain)
 
         // Immediate effect: the preview text re-renders at 18pt (vs 16pt at M),
         // so its frame must grow.
+        if !preview.waitForExistence(timeout: 3) {
+            harness.app.swipeUp()
+        }
         let deadline = Date().addingTimeInterval(5)
-        var heightAtXL = preview.frame.height
+        var previewHeightAtXL = preview.frame.height
         while Date() < deadline {
-            heightAtXL = preview.frame.height
-            if heightAtXL > heightAtM + 0.5 { break }
+            previewHeightAtXL = preview.frame.height
+            if previewHeightAtXL > previewHeightAtM + 0.5 { break }
             usleep(200_000)
         }
         XCTAssertGreaterThan(
-            heightAtXL, heightAtM + 0.5,
-            "Font-size preview text did not grow after selecting XL (M: \(heightAtM), XL: \(heightAtXL))"
+            previewHeightAtXL, previewHeightAtM + 0.5,
+            "Font-size preview text did not grow after selecting XL (M: \(previewHeightAtM), XL: \(previewHeightAtXL))"
         )
         harness.screenshot(screen: "0065-appearance-fontsize-xl")
 
-        // Evidence for the app-wide scaling check: Home feed at XL.
+        // App-wide effect (#0200): the same feed post must render taller at
+        // XL (1.125× type) than at M — the old behavior (pixel-identical
+        // feed across tiers) is the bug this guards against.
         goHomeAndWaitForFeed()
+        let postAtXL = firstFeedPostContent()
+        XCTAssertTrue(postAtXL.waitForExistence(timeout: 10), "No post content found in the home feed at XL")
+        XCTAssertEqual(
+            postAtXL.label, postLabelAtM,
+            "First feed post changed between the M and XL measurements — height comparison is not like-for-like"
+        )
+        let postHeightAtXL = postAtXL.frame.height
+        XCTAssertGreaterThan(
+            postHeightAtXL, postHeightAtM + 1.0,
+            "Feed post text did not scale after selecting XL (M: \(postHeightAtM), XL: \(postHeightAtXL)) — font tier has no app-wide effect (#0200)"
+        )
         harness.screenshot(screen: "0065-home-fontsize-xl")
 
         // Persistence: relaunch and confirm XL is still selected.
