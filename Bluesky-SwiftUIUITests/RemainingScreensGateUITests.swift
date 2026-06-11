@@ -322,6 +322,69 @@ final class RemainingScreensGateUITests: XCTestCase {
         harness.screenshot(screen: "0066-lists-after-delete")
     }
 
+    /// #0203 regression check: a created list must appear in the hub
+    /// *immediately* (optimistic insert from the `createRecord` response),
+    /// not after AppView indexing catches up. The pre-fix behavior was the
+    /// hub staying on "No Lists" because the instant `getLists` re-fetch
+    /// returned the stale set — so this asserts the row within a short
+    /// window right after the Create tap, then swipe-deletes the list and
+    /// confirms a refresh does not resurrect it (delete tombstone).
+    /// Fully reversed: the account ends with zero lists.
+    @MainActor
+    func testListCreateAppearsImmediatelyThenDelete0203() throws {
+        let creds = try requireCredentials()
+        let listName = "UITest-0203 List"
+
+        launchToProfileMenuItem("My Lists", creds: creds)
+        XCTAssertTrue(waitForScreenTitled("Lists"), "Lists screen did not push from the profile menu")
+
+        // Create.
+        let add = harness.app.navigationBars.buttons["Add"].firstMatch.exists
+            ? harness.app.navigationBars.buttons["Add"].firstMatch
+            : harness.app.buttons["Add"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 8), "Create (+) button missing from the Lists toolbar")
+        add.tap()
+        XCTAssertTrue(waitForScreenTitled("New List"), "New List sheet did not present")
+        let nameField = harness.app.textFields["Name"].firstMatch
+        XCTAssertTrue(nameField.waitForExistence(timeout: 8), "Name field missing on the New List sheet")
+        nameField.tap()
+        nameField.typeText(listName)
+        let create = harness.app.buttons["Create"].firstMatch
+        XCTAssertTrue(create.waitForExistence(timeout: 5), "Create button missing on the New List sheet")
+        create.tap()
+
+        // THE #0203 ASSERTION: the row surfaces immediately after the sheet
+        // dismisses — well inside AppView indexing latency. 5 seconds covers
+        // sheet-dismiss animation + the createRecord round-trip only.
+        let row = harness.app.staticTexts[listName].firstMatch
+        XCTAssertTrue(
+            row.waitForExistence(timeout: 5),
+            "#0203 regression: created list did not appear in the hub immediately after Create"
+        )
+        harness.screenshot(screen: "0203-list-appears-immediately")
+
+        // Delete via the swipe action and verify it stays gone across a
+        // pull-to-refresh (stale getLists must not resurrect the row).
+        let cell = cellContaining(listName)
+        XCTAssertTrue(cell.waitForExistence(timeout: 5), "List cell not found for swipe-to-delete")
+        cell.swipeLeft()
+        let delete = harness.app.buttons["Delete"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "Swipe Delete action did not appear on the list row")
+        delete.tap()
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline, harness.app.staticTexts[listName].exists {
+            usleep(250_000)
+        }
+        XCTAssertFalse(harness.app.staticTexts[listName].exists, "List row still present after delete")
+        harness.app.swipeDown()
+        sleep(3)
+        XCTAssertFalse(
+            harness.app.staticTexts[listName].exists,
+            "#0203 regression: deleted list resurrected by the post-delete refresh"
+        )
+        harness.screenshot(screen: "0203-lists-after-delete")
+    }
+
     /// Continuation / cleanup for `testListsCreateOpenDelete`: that test's
     /// create step succeeds server-side, but the hub re-fetches `getLists`
     /// once, immediately, racing AppView indexing — so the new row never
