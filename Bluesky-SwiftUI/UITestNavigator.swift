@@ -3,6 +3,7 @@ import OSLog
 import Observation
 import BlueskyCore
 import BlueskyFeed
+import BlueskyKit
 
 // MARK: - UITestIntent
 
@@ -45,9 +46,16 @@ enum UITestIntent: Equatable, Codable {
     case openFirstConversation
     /// Unconditional delay, capped at 10 seconds.
     case wait(seconds: Double)
+    /// Test-data cleanup (#0064): delete the signed-in account's own posts
+    /// whose text begins with `markerPrefix`. Only reachable from a UI-test
+    /// launch (the navigator only exists when `BLUESKY_UI_TEST_SCRIPT` is
+    /// set), and guarded against broad deletes — the prefix must be at
+    /// least 8 characters. Uses the app's own authenticated network client
+    /// (`com.atproto.repo.listRecords` + `com.atproto.repo.deleteRecord`).
+    case deleteTestPosts(markerPrefix: String)
 
     private enum CodingKeys: String, CodingKey {
-        case intent, tab, minPosts, seconds
+        case intent, tab, minPosts, seconds, markerPrefix
     }
 
     init(from decoder: any Decoder) throws {
@@ -81,6 +89,9 @@ enum UITestIntent: Equatable, Codable {
         case "wait":
             let seconds = try c.decodeIfPresent(Double.self, forKey: .seconds) ?? 1
             self = .wait(seconds: seconds)
+        case "deleteTestPosts":
+            let prefix = try c.decode(String.self, forKey: .markerPrefix)
+            self = .deleteTestPosts(markerPrefix: prefix)
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .intent, in: c,
@@ -113,6 +124,9 @@ enum UITestIntent: Equatable, Codable {
         case .wait(let seconds):
             try c.encode("wait", forKey: .intent)
             try c.encode(seconds, forKey: .seconds)
+        case .deleteTestPosts(let markerPrefix):
+            try c.encode("deleteTestPosts", forKey: .intent)
+            try c.encode(markerPrefix, forKey: .markerPrefix)
         }
     }
 }
@@ -158,6 +172,14 @@ final class UITestNavigator {
     /// Feed store used by `waitForFeedLoad` / `tapFirstPost`. Injected by the
     /// app at boot so the navigator polls the same instance the UI renders.
     @ObservationIgnored private weak var feedStore: FeedStore?
+
+    /// Authenticated network client used by `deleteTestPosts` (#0064).
+    /// Injected by the app at boot alongside the feed store; nil outside a
+    /// UI-test launch (the navigator itself only exists in that case).
+    @ObservationIgnored private var network: (any NetworkClient)?
+
+    /// Account store used by `deleteTestPosts` to resolve the signed-in DID.
+    @ObservationIgnored private var accounts: (any AccountStore)?
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "co.sstools.Bluesky",
@@ -212,6 +234,15 @@ final class UITestNavigator {
     /// the same instance the UI renders. Called once from the app at boot.
     func attach(feedStore: FeedStore) {
         self.feedStore = feedStore
+    }
+
+    /// Hands the app's authenticated network client and account store to the
+    /// navigator so `deleteTestPosts` can clean up marker posts created by a
+    /// UI-test run (#0064). Called once from the app at boot, right after
+    /// `attach(feedStore:)`.
+    func attach(network: any NetworkClient, accounts: any AccountStore) {
+        self.network = network
+        self.accounts = accounts
     }
 
     // MARK: Run loop
@@ -302,6 +333,72 @@ final class UITestNavigator {
             let clamped = min(max(seconds, 0), intentTimeout)
             try? await Task.sleep(nanoseconds: UInt64(clamped * 1_000_000_000))
             return true
+
+        case .deleteTestPosts(let markerPrefix):
+            return await deleteTestPosts(markerPrefix: markerPrefix)
+        }
+    }
+
+    // MARK: - Test-data cleanup (#0064)
+
+    /// Minimal decode of `com.atproto.repo.listRecords` for post records —
+    /// we only need the record URI (for the rkey) and the post text (to
+    /// match the marker prefix).
+    private nonisolated struct ListRecordsResponse: Decodable, Sendable {
+        struct Record: Decodable, Sendable {
+            struct Value: Decodable, Sendable { let text: String? }
+            let uri: String
+            let value: Value
+        }
+        let records: [Record]
+    }
+
+    /// Deletes the signed-in account's own `app.bsky.feed.post` records whose
+    /// text begins with `markerPrefix`. Guard rails:
+    ///
+    ///   - only runs inside a UI-test launch (the navigator's existence gate);
+    ///   - refuses prefixes shorter than 8 characters, so a malformed script
+    ///     can't mass-delete real posts;
+    ///   - matches on the *author's own repo* only (`repo == current DID`).
+    ///
+    /// Failures are surfaced through `scriptError` so the test process sees
+    /// them via the `ui-test-driver-error` element.
+    @MainActor
+    private func deleteTestPosts(markerPrefix: String) async -> Bool {
+        guard markerPrefix.count >= 8 else {
+            scriptError = "ui-test: deleteTestPosts markerPrefix too short (min 8 chars)"
+            return false
+        }
+        guard let network, let accounts else {
+            scriptError = "ui-test: deleteTestPosts has no network/account store attached"
+            return false
+        }
+        do {
+            guard let did = try await accounts.loadCurrentDID() else {
+                scriptError = "ui-test: deleteTestPosts found no signed-in account"
+                return false
+            }
+            let response: ListRecordsResponse = try await network.get(
+                lexicon: "com.atproto.repo.listRecords",
+                params: [
+                    "repo": did.rawValue,
+                    "collection": "app.bsky.feed.post",
+                    "limit": "50",
+                ]
+            )
+            let targets = response.records.filter { $0.value.text?.hasPrefix(markerPrefix) == true }
+            logger.info("ui-test: deleteTestPosts matched \(targets.count, privacy: .public) of \(response.records.count, privacy: .public) records")
+            for record in targets {
+                guard let rkey = record.uri.components(separatedBy: "/").last, !rkey.isEmpty else { continue }
+                let req = DeleteRecordRequest(repo: did.rawValue, collection: "app.bsky.feed.post", rkey: rkey)
+                let _: EmptyResponse = try await network.post(lexicon: "com.atproto.repo.deleteRecord", body: req)
+                logger.info("ui-test: deleteTestPosts deleted \(record.uri, privacy: .public)")
+            }
+            return true
+        } catch {
+            scriptError = "ui-test: deleteTestPosts failed: \(error)"
+            logger.error("ui-test: deleteTestPosts failed: \(String(describing: error), privacy: .public)")
+            return false
         }
     }
 

@@ -34,6 +34,10 @@ enum UITestIntent: Encodable {
     case openFirstConversation
     /// Unconditional delay (seconds, capped at 10 by the app).
     case wait(seconds: Double)
+    /// Delete the signed-in account's own posts whose text begins with
+    /// `markerPrefix` (test-data cleanup, #0064). The app refuses prefixes
+    /// shorter than 8 characters.
+    case deleteTestPosts(markerPrefix: String)
 
     /// Convenience for the common tab cases, matching the spec's `.selectTab(.home)`.
     static let home = UITestIntent.selectTab("home")
@@ -44,7 +48,7 @@ enum UITestIntent: Encodable {
     static let profile = UITestIntent.selectTab("profile")
 
     private enum CodingKeys: String, CodingKey {
-        case intent, tab, minPosts, seconds
+        case intent, tab, minPosts, seconds, markerPrefix
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -71,6 +75,9 @@ enum UITestIntent: Encodable {
         case .wait(let seconds):
             try c.encode("wait", forKey: .intent)
             try c.encode(seconds, forKey: .seconds)
+        case .deleteTestPosts(let markerPrefix):
+            try c.encode("deleteTestPosts", forKey: .intent)
+            try c.encode(markerPrefix, forKey: .markerPrefix)
         }
     }
 }
@@ -138,6 +145,18 @@ final class BlueskyUITestHarness {
 
     // MARK: Waiting
 
+    /// The driver's error surface, matched by identifier across *any* element
+    /// type. SwiftUI surfaces an `.accessibilityIdentifier` element as a
+    /// `staticText` on iOS but not always on macOS (it can come through as a
+    /// generic element), so query the identifier without binding to a concrete
+    /// `XCUIElement.ElementType` — honoring the contract (`ui-test-driver-error`)
+    /// on both shells.
+    var scriptErrorElement: XCUIElement {
+        app.descendants(matching: .any)
+            .matching(identifier: "ui-test-driver-error")
+            .firstMatch
+    }
+
     /// Blocks until `MainTabView` is on screen. The tab bar's accessibility
     /// elements (or, on macOS, the sidebar) are present once the app is past
     /// login. We key off the Home tab label, which both layouts expose.
@@ -150,15 +169,52 @@ final class BlueskyUITestHarness {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if home.exists || homeCell.exists { return true }
-            if app.staticTexts["ui-test-driver-error"].exists { return false }
+            if scriptErrorElement.exists { return false }
             usleep(200_000)
         }
         return home.exists || homeCell.exists
     }
 
+    // MARK: Cross-platform navigation
+
+    /// Resolves a primary navigation destination by its visible title across
+    /// both shells. On iOS the tabs are `Button`s (the custom compact tab bar
+    /// or the regular-width sidebar `Label`); on macOS they are selectable
+    /// sidebar `cells` inside the `NavigationSplitView` `List(selection:)`.
+    /// Returns whichever element type the running platform exposes so a single
+    /// test body drives navigation on iOS and macOS without `#if os` forks.
+    func tab(_ title: String) -> XCUIElement {
+        let button = app.buttons[title]
+        if button.exists { return button }
+        let cell = app.cells[title]
+        if cell.exists { return cell }
+        // Neither resolved yet (the shell may still be settling) — return the
+        // button query so callers' `waitForExistence` can poll it; the macOS
+        // sidebar cell is also reachable via `app.cells[title]` once present.
+        return button
+    }
+
+    /// Taps a primary navigation destination by title on either shell. Waits
+    /// briefly for the element to materialize so a freshly-launched or
+    /// tab-switched shell has time to mount its sidebar / tab bar.
+    @discardableResult
+    func tapTab(_ title: String, timeout: TimeInterval = 5) -> Bool {
+        // Prefer whichever element type currently exists; fall back to waiting
+        // on the button, then the cell, mirroring `waitForMainTabView`.
+        if app.buttons[title].waitForExistence(timeout: timeout) {
+            app.buttons[title].firstMatch.tap()
+            return true
+        }
+        if app.cells[title].waitForExistence(timeout: timeout) {
+            app.cells[title].firstMatch.tap()
+            return true
+        }
+        return false
+    }
+
     /// Fails the test if the app surfaced a script decode / dispatch error.
     func assertNoScriptError(file: StaticString = #filePath, line: UInt = #line) {
-        let errorLabel = app.staticTexts["ui-test-driver-error"]
+        let errorLabel = scriptErrorElement
         XCTAssertFalse(
             errorLabel.exists,
             "UI test driver reported a script error: \(errorLabel.label)",

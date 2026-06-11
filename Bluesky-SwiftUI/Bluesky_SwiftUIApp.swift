@@ -69,9 +69,22 @@ struct Bluesky_SwiftUIApp: App {
             // where `uiTestNavigator` is `nil`).
             .overlay(alignment: .top) {
                 if let message = uiTestNavigator?.scriptError {
+                    // Diagnostic surface for the XCUITest process, read via the
+                    // `ui-test-driver-error` identifier. Only ever rendered when
+                    // a script error exists — i.e. a UI-test failure path, never
+                    // in production (where `uiTestNavigator` is nil) and never in
+                    // passing screenshots. Rendered as a real, laid-out, visible
+                    // element rather than a 0×0 / transparent one: AppKit prunes
+                    // zero-size or fully-clear elements from the macOS
+                    // accessibility tree, which made the label unreadable there
+                    // (iOS/UIKit kept it, so only macOS failed). A small visible
+                    // banner is the most reliable cross-platform way to keep the
+                    // element queryable.
                     Text(message)
-                        .frame(width: 0, height: 0)
-                        .opacity(0.001)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white)
+                        .padding(2)
+                        .background(Color.red)
                         .allowsHitTesting(false)
                         .accessibilityIdentifier("ui-test-driver-error")
                         .accessibilityLabel("ui-test-driver-error")
@@ -178,6 +191,9 @@ struct Bluesky_SwiftUIApp: App {
         // intents poll the same instance the UI renders.
         let navigator = UITestNavigator.fromEnvironment()
         navigator?.attach(feedStore: feedStore)
+        // Cleanup intents (#0064 `deleteTestPosts`) need the authenticated
+        // network client and the account store to resolve the signed-in DID.
+        navigator?.attach(network: network, accounts: accounts)
         uiTestNavigator = navigator
 
         session = sm
