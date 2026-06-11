@@ -25,6 +25,12 @@ struct MainTabView: View {
     /// `nil` when `BLUESKY_UI_TEST_SCRIPT` is absent), so the driver code path
     /// is dead weight only under UI test. See `UITestNavigator`.
     @Environment(UITestNavigator.self) private var uiTestNavigator: UITestNavigator?
+    /// Drives the unread-badge refetch when the app returns to the
+    /// foreground (#0196). RN parity: `checkUnread` in
+    /// `state/queries/notifications/unread.tsx` early-returns while the app
+    /// isn't active, so the count re-syncs on the first tick after
+    /// foregrounding — we refetch explicitly on the `.active` transition.
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: AppTab? = .home
     @State private var messageBadge = 0
     @State private var notificationBadge = 0
@@ -47,6 +53,13 @@ struct MainTabView: View {
     /// per-screen instance share state (avoids duplicate fetches whenever
     /// the user re-enters the tab).
     @State private var savedStore: BookmarksStore?
+    /// Single shared `NotificationsViewModel` (#0196) so the app-shell
+    /// unread-count poll and the Notifications tab screen observe one
+    /// `NotificationsStore`. Without sharing, the screen's `markSeen()`
+    /// would zero a *different* store's count and the badge could never
+    /// clear; with it, the screen's `.onChange(of: unreadCount)` →
+    /// `onUnreadCountChange` fires on the N → 0 transition.
+    @State private var notificationsViewModel: NotificationsViewModel?
     /// Avatar URL for the signed-in viewer, used by the iOS Profile tab icon.
     /// Populated lazily on first appearance and refreshed when the active
     /// account changes; falls back to a placeholder while loading or when
@@ -113,6 +126,15 @@ struct MainTabView: View {
                 OfflineBanner(state: offlineBannerState)
             }
             .task { await observePathStatus() }
+            // #0196: app-shell unread-count poll — restarts when the
+            // signed-in account changes so the badge never carries over
+            // across account switches.
+            .task(id: session.currentAccount?.did) {
+                await pollUnreadNotifications()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { refreshUnreadBadge() }
+            }
             .modifier(UITestDriverModifier(
                 navigator: uiTestNavigator,
                 selectedTab: $selectedTab,
@@ -141,6 +163,15 @@ struct MainTabView: View {
             .task(id: session.currentAccount?.did) {
                 guard session.currentAccount != nil else { return }
                 PushRegistrationCoordinator.shared.activate(network: env.network)
+            }
+            // #0196: app-shell unread-count poll — restarts when the
+            // signed-in account changes so the badge never carries over
+            // across account switches.
+            .task(id: session.currentAccount?.did) {
+                await pollUnreadNotifications()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { refreshUnreadBadge() }
             }
             .overlay(alignment: .top) {
                 OfflineBanner(state: offlineBannerState)
@@ -934,8 +965,12 @@ struct MainTabView: View {
                 viewerDID: session.currentAccount?.did
             )
         case .notifications:
+            // #0196: pass the *shared* view model (not `network:`) so the
+            // screen's `markSeen()` zeroes the same store the shell-level
+            // unread poll populates — that N → 0 transition is what fires
+            // `onUnreadCountChange` and clears the tab badge.
             NotificationsScreen(
-                network: env.network,
+                viewModel: notificationsViewModelOrCreate(),
                 onUnreadCountChange: { count in notificationBadge = count },
                 onAuthorTap: { profile in feedProfileDID = profile.did },
                 // #0160 / #0062: hoist the thread destination up to the app
@@ -1209,6 +1244,57 @@ struct MainTabView: View {
         case .messages:      return messageBadge
         case .notifications: return notificationBadge
         default:             return 0
+        }
+    }
+
+    // MARK: - Unread notifications poll (#0196)
+
+    /// RN polls the unread count every 30 seconds while foregrounded —
+    /// `UPDATE_INTERVAL = 30 * 1e3` in
+    /// `src/state/queries/notifications/unread.tsx` — with an initial check
+    /// as soon as a session exists. (RN additionally skips ~50% of poll
+    /// ticks once the count is non-zero and stops entirely at 30+; we keep
+    /// the fixed 30 s cadence — `getUnreadCount` is a single cheap query,
+    /// unlike RN's full 40-item page fetch.)
+    private static let unreadPollInterval: Duration = .seconds(30)
+
+    /// Lazily creates the shared `NotificationsViewModel` on first access.
+    /// Mirrors `savedStoreOrCreate()` — one instance backs both the
+    /// shell-level poll and the Notifications tab screen.
+    private func notificationsViewModelOrCreate() -> NotificationsViewModel {
+        if let existing = notificationsViewModel { return existing }
+        let vm = NotificationsViewModel(network: env.network)
+        notificationsViewModel = vm
+        return vm
+    }
+
+    /// App-shell unread-count poll loop (#0196). Runs for the lifetime of
+    /// the signed-in account (`.task(id: session.currentAccount?.did)`):
+    /// fetches once immediately — the badge populates right after session
+    /// restore, before the Notifications tab is ever opened — then every
+    /// `unreadPollInterval`, mirroring RN. On iOS the task is suspended
+    /// with the app, so backgrounded ticks simply don't run; the
+    /// `scenePhase == .active` handler covers the refetch-on-foreground.
+    private func pollUnreadNotifications() async {
+        let vm = notificationsViewModelOrCreate()
+        guard session.currentAccount != nil else {
+            notificationBadge = 0
+            return
+        }
+        while !Task.isCancelled {
+            await vm.fetchUnreadCount()
+            notificationBadge = vm.unreadCount
+            try? await Task.sleep(for: Self.unreadPollInterval)
+        }
+    }
+
+    /// One-shot unread refetch, fired on return to the foreground (#0196).
+    private func refreshUnreadBadge() {
+        guard session.currentAccount != nil else { return }
+        Task {
+            let vm = notificationsViewModelOrCreate()
+            await vm.fetchUnreadCount()
+            notificationBadge = vm.unreadCount
         }
     }
 
