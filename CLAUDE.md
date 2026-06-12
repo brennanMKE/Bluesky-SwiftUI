@@ -35,7 +35,7 @@ All planning docs live in `../Bluesky-Migration/`. Start there when resuming wor
 | [0193](../Bluesky-Migration/issues/0193.md) | DM compose bar on iPhone has no option to attach an image | BlueskyMessages | open |
 | [0194](../Bluesky-Migration/issues/0194.md) | Sending an image in a DM does not work on macOS | BlueskyMessages | open |
 | [0195](../Bluesky-Migration/issues/0195.md) | Incoming DMs do not appear until the conversation is reloaded: add getLog polling while messages UI is visible | BlueskyMessages | open |
-| [0196](../Bluesky-Migration/issues/0196.md) | macOS top bar: trailing buttons crammed on the right; only the Feeds (`#`) button should remain | Bluesky-SwiftUI | open |
+| [0196](../Bluesky-Migration/issues/0196.md) | macOS top bar: trailing buttons crammed on the right; only the Feeds (`#`) button should remain | Bluesky-SwiftUI | resolved |
 | [0197](../Bluesky-Migration/issues/0197.md) | macOS: post button should be a floating button at the bottom right, as in the RN app | Bluesky-SwiftUI | open |
 | [0198](../Bluesky-Migration/issues/0198.md) | macOS: replace the sidebar with a hamburger-toggled menu drawer, as in the RN app | Bluesky-SwiftUI | open |
 

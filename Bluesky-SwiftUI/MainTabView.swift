@@ -313,14 +313,6 @@ struct MainTabView: View {
             }
             .scrollContentBackground(.hidden)
             .navigationTitle("Bluesky")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { selectedTab = .home } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .help("Refresh")
-                }
-            }
             .toolbarBackground(theme.colors.background, for: .automatic)
         } detail: {
             NavigationStack {
@@ -861,27 +853,6 @@ struct MainTabView: View {
                         }
                     }
                 }
-                #else
-                // macOS: render compose and "My Feeds" (#) as two independent
-                // ToolbarItems so each gets its own slot rather than a single
-                // shared capsule cluster (#0148). Distinct placements
-                // (.navigation for the leading sidebar control side, and
-                // .primaryAction for the trailing actions) keep the system
-                // from grouping them. Tooltips via .help() — same pattern as
-                // #0009.
-                //
-                // The leading sidebar toggle is provided automatically by
-                // NavigationSplitView and lives in the .navigation slot. We
-                // intentionally do not add another sidebar button here so the
-                // system control isn't duplicated.
-                ToolbarItem(id: "bsky.compose", placement: .primaryAction) {
-                    Button {
-                        showComposer = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
-                    .help("New post")
-                }
                 #endif
                 #if os(iOS)
                 // The Saved Feeds shortcut moves into the iPhone drawer (#0072);
@@ -896,12 +867,10 @@ struct MainTabView: View {
                     }
                 }
                 #else
-                // macOS: My Feeds (`#`) — matches the iOS-RN trailing icon
-                // (BlueskyTopBar with `number` glyph, #0072 / #0073). The
-                // previous `list.star` glyph was the macOS-specific "Saved
-                // Feeds" shortcut — same destination, different icon — so
-                // align with RN-iOS for parity. Separate ToolbarItem with a
-                // distinct id so it doesn't merge with the compose button.
+                // macOS: My Feeds (`#`) is the sole trailing toolbar button
+                // (#0196). Compose was removed from the toolbar — it moves to
+                // a floating bottom-right button in #0197. The `number` glyph
+                // matches the iOS-RN trailing icon (BlueskyTopBar, #0072 / #0073).
                 ToolbarItem(id: "bsky.myfeeds", placement: .primaryAction) {
                     Button {
                         showSavedFeeds = true
