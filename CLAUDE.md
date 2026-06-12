@@ -38,7 +38,8 @@ All planning docs live in `../Bluesky-Migration/`. Start there when resuming wor
 | [0196](../Bluesky-Migration/issues/0196.md) | macOS top bar: trailing buttons crammed on the right; only the Feeds (`#`) button should remain | Bluesky-SwiftUI | resolved |
 | [0197](../Bluesky-Migration/issues/0197.md) | macOS: post button should be a floating button at the bottom right, as in the RN app | Bluesky-SwiftUI | resolved |
 | [0198](../Bluesky-Migration/issues/0198.md) | macOS: replace the sidebar with a hamburger-toggled menu drawer, as in the RN app | Bluesky-SwiftUI | resolved |
-| [0199](../Bluesky-Migration/issues/0199.md) | macOS Feeds screen shows placeholder "Feed" rows: `#` button routes to the bare SavedFeedsScreen instead of MyFeedsScreen | BlueskyFeed / Bluesky-SwiftUI | open |
+| [0199](../Bluesky-Migration/issues/0199.md) | macOS Feeds screen shows placeholder "Feed" rows: `#` button routes to the bare SavedFeedsScreen instead of MyFeedsScreen | BlueskyFeed / Bluesky-SwiftUI | resolved |
+| [0200](../Bluesky-Migration/issues/0200.md) | Remove dead `SavedFeedsScreen` from BlueskyFeed (unreachable after #0199) | BlueskyFeed | open |
 
 Keep this table in sync with `../Bluesky-Migration/Issues.md`. File new issues there first, then add a row here.
 

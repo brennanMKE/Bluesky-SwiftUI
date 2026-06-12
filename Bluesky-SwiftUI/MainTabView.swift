@@ -46,7 +46,6 @@ struct MainTabView: View {
     @State private var showModeration = false
     @State private var showSettings = false
     @State private var showBookmarks = false
-    @State private var showSavedFeeds = false
     @State private var showLists = false
     @State private var offlineBannerState = OfflineBannerState()
     /// Single shared `BookmarksStore` so the sidebar Saved tab and the
@@ -80,10 +79,11 @@ struct MainTabView: View {
     /// macOS-only: whether the slide-in menu drawer is currently visible.
     /// On macOS the drawer replaces the `NavigationSplitView` sidebar (#0198).
     @State private var showMacDrawer = false
-    /// iOS-only: navigation flag to push the My Feeds destination from the
-    /// `#` button on the top bar (#0073).
+    /// Navigation flag to push the My Feeds destination from the
+    /// `#` button on the top bar / toolbar (#0073 / #0199). Used on both
+    /// iOS and macOS — the `MyFeedsScreen` destination is now cross-platform.
     @State private var showMyFeeds = false
-    /// iOS-only: AT-URI of a custom feed opened from the My Feeds screen,
+    /// AT-URI of a custom feed opened from the My Feeds screen,
     /// used to push a `CustomFeedTimelineView` for that feed.
     @State private var openCustomFeedURI: ATURI?
     /// iOS-only: navigation flag to push a notification-settings placeholder
@@ -277,7 +277,6 @@ struct MainTabView: View {
     private func resetTransientNavState() {
         threadURI = nil
         feedProfileDID = nil
-        showSavedFeeds = false
         showModeration = false
         showSettings = false
         showBookmarks = false
@@ -455,7 +454,7 @@ struct MainTabView: View {
                 Task { await refreshViewerProfile() }
             },
             onDismiss: { dismissMacDrawer() },
-            onPushMyFeeds:   { showSavedFeeds = true },
+            onPushMyFeeds:   { showMyFeeds = true },
             onPushLists:     { showLists = true },
             onPushBookmarks: { showBookmarks = true },
             onPushSettings:  { showSettings = true }
@@ -1021,10 +1020,13 @@ struct MainTabView: View {
                 #if os(iOS)
                 // The Saved Feeds shortcut moves into the iPhone drawer (#0072);
                 // keep it as a toolbar item only at iPad regular width.
+                // Routes to MyFeedsScreen (same as iOS compact via showMyFeeds)
+                // so iPadOS shows the rich feed list, not the bare placeholder
+                // (#0199).
                 if horizontalSizeClass == .regular {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
-                            showSavedFeeds = true
+                            showMyFeeds = true
                         } label: {
                             Image(systemName: "list.star")
                         }
@@ -1035,9 +1037,10 @@ struct MainTabView: View {
                 // (#0196). Compose was removed from the toolbar — it moves to
                 // a floating bottom-right button in #0197. The `number` glyph
                 // matches the iOS-RN trailing icon (BlueskyTopBar, #0072 / #0073).
+                // Routes to MyFeedsScreen (not the bare SavedFeedsScreen) — #0199.
                 ToolbarItem(id: "bsky.myfeeds", placement: .primaryAction) {
                     Button {
-                        showSavedFeeds = true
+                        showMyFeeds = true
                     } label: {
                         Image(systemName: "number")
                     }
@@ -1045,13 +1048,11 @@ struct MainTabView: View {
                 }
                 #endif
             }
-            .navigationDestination(isPresented: $showSavedFeeds) {
-                SavedFeedsScreen(network: env.network, cache: env.cache)
-            }
-            #if os(iOS)
-            // Destination for the Home top bar's `#` button (#0072 / #0073).
-            // The screen lets the user manage their pinned/saved feeds, search
-            // for new ones, and discover curated suggestions.
+            // Destination for the `#` toolbar/drawer button — routes to the
+            // rich MyFeedsScreen on all platforms (#0072 / #0073 / #0199).
+            // Previously iOS-only; now cross-platform since MyFeedsScreen's
+            // iOS-specific modifiers (swipe actions, textInputAutocapitalization)
+            // are already guarded with #if os(iOS) inside the screen itself.
             .navigationDestination(isPresented: $showMyFeeds) {
                 MyFeedsScreen(
                     network: env.network,
@@ -1071,7 +1072,6 @@ struct MainTabView: View {
                     }
                 )
             }
-            #endif
             // Custom feed timeline destination. Historically iOS-only (the
             // My Feeds entry point), but the Trending Videos interstitial's
             // "View more" card (#0205) routes here on both platforms, so the

@@ -119,9 +119,10 @@ final class RemainingScreensGateUITests: XCTestCase {
 
     // MARK: - Saved Feeds (read-only recon)
 
-    /// READ-ONLY sweep of the My Feeds screen — the canonical iPhone home for
-    /// pinned/saved feed management (the iPad/macOS `SavedFeedsScreen` is not
-    /// reachable on compact width). Captures the server `savedFeedsPrefV2`
+    /// READ-ONLY sweep of the My Feeds screen — the canonical home for
+    /// pinned/saved feed management on all platforms (#0199: MyFeedsScreen now
+    /// used on macOS / iPadOS too; SavedFeedsScreen no longer reachable).
+    /// Captures the server `savedFeedsPrefV2`
     /// state for the gate record. Performs NO pin/unpin/reorder writes: every
     /// `putPreferences` body in BlueskyKit carries a single preference object,
     /// and until the replace-vs-merge semantics of the endpoint are confirmed
