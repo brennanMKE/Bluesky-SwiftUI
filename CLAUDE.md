@@ -45,7 +45,9 @@ Keep this table in sync with `../Bluesky-Migration/Issues.md`. File new issues t
 
 When a bug is spotted: file it in `../Bluesky-Migration/` rather than fixing it immediately (see the workflow in `../Bluesky-Migration/CLAUDE.md`), then add a row to the table above.
 
-When an issue is fixed: update `Status` in both `../Bluesky-Migration/issues/NNNN.md` and the table above.
+Working an issue follows the review-gated branch workflow in `../Bluesky-Migration/Issues.md` (authoritative): code changes go on an `issue/NNNN` branch in this repo and/or `../BlueskyKit/`, implemented by a Sonnet subagent, reviewed by an Opus subagent, with token usage logged per round on the issue. After approval the branch is squash-merged to `main` as one `#NNNN` commit and the branch is kept, not deleted.
+
+When an issue is resolved (review approved): update `Status` in both `../Bluesky-Migration/issues/NNNN.md` and the table above — the table row update rides the issue branch when one exists in this repo. Only the user moves an issue to `closed`.
 
 ## Architecture constraints
 
