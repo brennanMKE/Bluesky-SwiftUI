@@ -163,6 +163,12 @@ struct MainTabView: View {
                 showBookmarks: $showBookmarks,
                 videoFeedEntry: $videoFeedEntry
             ))
+            // #0197: hoist the composer sheet to the macOS shell so the
+            // floating FAB can open it regardless of which tab is active.
+            // Mirrors RN's global `openComposer` action (LeftNav.tsx).
+            .sheet(isPresented: $showComposer) {
+                ComposerSheet(network: env.network, accountStore: env.accounts, preferences: env.preferences)
+            }
         #else
         adaptiveLayout
             .onOpenURL { handleDeepLink($0) }
@@ -332,6 +338,19 @@ struct MainTabView: View {
             .id(selectedTab ?? AppTab.home)
             .onChange(of: selectedTab) { _, _ in
                 resetTransientNavState()
+            }
+            // #0197: floating compose FAB — shown on every tab except
+            // Messages, matching the RN app's behavior. The FAB is
+            // overlaid on the NavigationStack so it persists across
+            // pushed destinations (ThreadView, ProfileScreen, etc.).
+            // 20pt padding mirrors the prototype (MacBlueskyNav
+            // HomeFeedView.swift ~line 77).
+            .overlay(alignment: .bottomTrailing) {
+                if (selectedTab ?? .home) != .messages {
+                    composeFAB
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 20)
+                }
             }
         }
         .background(theme.colors.background)
@@ -641,26 +660,6 @@ struct MainTabView: View {
         }
     }
 
-    /// Floating compose button (FAB) shown at bottom-right above the
-    /// iOS tab bar. Brand-blue circle with a pencil glyph; opens the
-    /// shared `ComposerSheet`.
-    private var composeFAB: some View {
-        Button {
-            showComposer = true
-        } label: {
-            Image(systemName: "square.and.pencil")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(
-                    Circle().fill(theme.colors.link)
-                )
-                .shadow(color: .black.opacity(0.18), radius: 6, x: 0, y: 2)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("New post")
-    }
-
     // MARK: - iOS drawer
 
     /// Slide-in left drawer shown on iPhone. Mirrors RN's
@@ -740,6 +739,33 @@ struct MainTabView: View {
         }
     }
     #endif
+
+    // MARK: - Shared UI components
+
+    /// Floating compose button (FAB) shown at bottom-right: above the iOS
+    /// tab bar on compact iPhone, and overlaid on the macOS detail pane
+    /// (#0197). Brand-blue circle with a pencil glyph; opens the shared
+    /// `ComposerSheet`. Shown on all tabs except Messages — matching the RN
+    /// app (iOS: `view/com/util/fab/FAB`; desktop: `view/shell/desktop/LeftNav`
+    /// `ComposeBtn`). The bottom-left "new posts" button (#0195 / MacBlueskyNav
+    /// prototype) lives in the same ZStack / overlay layer — keep padding
+    /// symmetric when adding it.
+    private var composeFAB: some View {
+        Button {
+            showComposer = true
+        } label: {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(
+                    Circle().fill(theme.colors.link)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 6, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("New post")
+    }
 
     // MARK: - Tab content (placeholder screens)
 
@@ -925,13 +951,11 @@ struct MainTabView: View {
             }
             // The composer sheet is attached at the layout root on iOS
             // compact (so the floating FAB can drive it from outside any
-            // tab); on macOS and iPad regular the per-tab toolbar compose
-            // button presents from this binding.
-            #if os(macOS)
-            .sheet(isPresented: $showComposer) {
-                ComposerSheet(network: env.network, accountStore: env.accounts, preferences: env.preferences)
-            }
-            #else
+            // tab); on macOS the sheet is hoisted to the shell level in
+            // `body` (#0197) so the FAB works on every tab — nothing
+            // attaches it here. On iPad regular, the tab-level sheet
+            // handles regular-width presentation.
+            #if os(iOS)
             .sheet(isPresented: Binding(
                 get: { showComposer && horizontalSizeClass == .regular },
                 set: { if !$0 { showComposer = false } }
