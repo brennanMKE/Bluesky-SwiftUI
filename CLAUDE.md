@@ -31,6 +31,7 @@ All planning docs live in `../Bluesky-Migration/`. Start there when resuming wor
 |---|-------|--------|--------|
 | [0001](../Bluesky-Migration/issues/0001.md) | Account session not persisted across app launches | BlueskyAuth | resolved |
 | [0002](../Bluesky-Migration/issues/0002.md) | Home feed posts not loaded after sign-in | BlueskyFeed | open |
+| [0186](../Bluesky-Migration/issues/0186.md) | DM conversation list fails to load: `chat.bsky.convo.listConvos` returns `MethodNotImplemented` | BlueskyMessages / BlueskyNetworking | resolved |
 
 Keep this table in sync with `../Bluesky-Migration/Issues.md`. File new issues there first, then add a row here.
 
