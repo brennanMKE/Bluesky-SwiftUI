@@ -32,6 +32,9 @@ All planning docs live in `../Bluesky-Migration/`. Start there when resuming wor
 | [0001](../Bluesky-Migration/issues/0001.md) | Account session not persisted across app launches | BlueskyAuth | resolved |
 | [0002](../Bluesky-Migration/issues/0002.md) | Home feed posts not loaded after sign-in | BlueskyFeed | open |
 | [0186](../Bluesky-Migration/issues/0186.md) | DM conversation list fails to load: `chat.bsky.convo.listConvos` returns `MethodNotImplemented` | BlueskyMessages / BlueskyNetworking | resolved |
+| [0193](../Bluesky-Migration/issues/0193.md) | DM compose bar on iPhone has no option to attach an image | BlueskyMessages | open |
+| [0194](../Bluesky-Migration/issues/0194.md) | Sending an image in a DM does not work on macOS | BlueskyMessages | open |
+| [0195](../Bluesky-Migration/issues/0195.md) | Incoming DMs do not appear until the conversation is reloaded: add getLog polling while messages UI is visible | BlueskyMessages | open |
 
 Keep this table in sync with `../Bluesky-Migration/Issues.md`. File new issues there first, then add a row here.
 
