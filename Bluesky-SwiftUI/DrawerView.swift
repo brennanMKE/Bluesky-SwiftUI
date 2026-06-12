@@ -1,4 +1,3 @@
-#if os(iOS)
 import SwiftUI
 import BlueskyAuth
 import BlueskyCore
@@ -6,7 +5,7 @@ import BlueskyKit
 import BlueskySettings
 import BlueskyUI
 
-/// Slide-in left drawer shown on iOS compact (iPhone) layouts.
+/// Slide-in left drawer used on iOS compact (iPhone) and macOS layouts.
 ///
 /// RN parity: matches `Bluesky-ReactNative/src/view/shell/Drawer.tsx`. Three
 /// zones top-to-bottom — profile header (avatar / name / handle / stats),
@@ -14,8 +13,8 @@ import BlueskyUI
 /// Feeds, Lists, Saved, Profile, Settings), and a footer with legal links
 /// plus Feedback / Help pills.
 ///
-/// The drawer is rendered as a `ZStack` overlay by the host (`MainTabView`),
-/// not a system sheet — RN uses a custom slide-in animation and a tap-anywhere
+/// The drawer is rendered as an overlay by the host (`MainTabView`), not a
+/// system sheet — RN uses a custom slide-in animation and a tap-anywhere
 /// scrim that the system `presentationDetents` API can't reproduce. This view
 /// only renders the *panel* itself; the host is responsible for the scrim,
 /// the move transition, and toggling visibility.
@@ -76,7 +75,11 @@ struct DrawerView: View {
     let onPushSettings: () -> Void
 
     var body: some View {
+        #if os(iOS)
         let panelWidth = min(UIScreen.main.bounds.width * 0.82, 340)
+        #else
+        let panelWidth: CGFloat = 280
+        #endif
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -103,7 +106,9 @@ struct DrawerView: View {
         .frame(width: panelWidth, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(theme.colors.background)
+        #if os(iOS)
         .ignoresSafeArea(edges: .bottom)
+        #endif
         .onAppear { onAppearOnce() }
     }
 
@@ -414,4 +419,3 @@ struct DrawerView: View {
     )
     .environment(\.colorScheme, .dark)
 }
-#endif

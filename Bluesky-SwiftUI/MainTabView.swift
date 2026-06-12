@@ -77,6 +77,9 @@ struct MainTabView: View {
     @State private var viewerFollowingCount: Int?
     /// iOS-only: whether the slide-in drawer is currently visible.
     @State private var showDrawer = false
+    /// macOS-only: whether the slide-in menu drawer is currently visible.
+    /// On macOS the drawer replaces the `NavigationSplitView` sidebar (#0198).
+    @State private var showMacDrawer = false
     /// iOS-only: navigation flag to push the My Feeds destination from the
     /// `#` button on the top bar (#0073).
     @State private var showMyFeeds = false
@@ -128,7 +131,7 @@ struct MainTabView: View {
 
     var body: some View {
         #if os(macOS)
-        macOSSidebar
+        macOSNavigationLayout
             .onOpenURL { handleDeepLink($0) }
             .onReceive(NotificationCenter.default.publisher(for: .pushRouteReceived)) { _ in
                 applyPendingPushRoute()
@@ -288,6 +291,12 @@ struct MainTabView: View {
         showStarterPackCreate = false
         pendingCreatedStarterPackURI = nil
         videoFeedEntry = nil
+        // #0198: close the macOS overlay drawer whenever a tab change fires
+        // (e.g. deep link, push notification, or UITestNavigator). Animated
+        // without the easeInOut wrapper here since the tab change is
+        // programmatic — an immediate close is fine (no visual jank from the
+        // navigation taking focus away anyway).
+        showMacDrawer = false
 
         // #0030: a push-notification route that required a tab switch parked
         // its destination above; apply it after the reset, deferred one tick
@@ -305,57 +314,186 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: - macOS sidebar (NavigationSplitView)
+    // MARK: - macOS navigation layout (NavigationStack + overlay drawer, #0198)
 
     #if os(macOS)
-    private var macOSSidebar: some View {
-        NavigationSplitView {
-            List(selection: $selectedTab) {
-                ForEach(AppTab.sidebarTabs) { tab in
-                    Label(tab.title, systemImage: tab.icon)
-                        .badge(badge(for: tab))
-                        .tag(tab)
+    /// macOS shell: a full-window `NavigationStack` with a hamburger-toggled
+    /// overlay drawer that replaces the `NavigationSplitView` sidebar (#0198).
+    /// The drawer is the sole tab-switching mechanism on macOS, matching the
+    /// RN app's LeftNav / Drawer pattern. The floating compose FAB (#0197) and
+    /// the `#` Feeds toolbar button (#0196) are preserved.
+    private var macOSNavigationLayout: some View {
+        NavigationStack {
+            // ZStack floods the full window with the theme background,
+            // overriding the system near-black material that ignores any
+            // `.background()` applied from outside the NavigationStack.
+            ZStack(alignment: .top) {
+                theme.colors.background.ignoresSafeArea()
+                tabContent(selectedTab ?? .home)
+            }
+        }
+        // Keying on the active tab forces SwiftUI to create a fresh stack
+        // whenever the tab changes, clearing pushed destinations (ThreadView,
+        // ProfileScreen, etc.) and showing the new tab's root. Without this,
+        // macOS keeps the existing stack alive even though the content changed.
+        .id(selectedTab ?? AppTab.home)
+        .onChange(of: selectedTab) { _, _ in
+            resetTransientNavState()
+        }
+        // Hamburger button at the leading toolbar edge (#0198). Toggles the
+        // overlay drawer; replaces the system sidebar toggle that
+        // `NavigationSplitView` injected automatically.
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showMacDrawer.toggle()
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal")
                 }
+                .help("Toggle menu")
+                .accessibilityLabel("Open menu")
             }
-            .scrollContentBackground(.hidden)
-            .navigationTitle("Bluesky")
-            .toolbarBackground(theme.colors.background, for: .automatic)
-        } detail: {
-            NavigationStack {
-                // ZStack floods the detail column with the theme background from
-                // inside the NavigationStack, overriding the system near-black
-                // material that ignores any .background() applied from outside.
-                ZStack(alignment: .top) {
-                    theme.colors.background.ignoresSafeArea()
-                    tabContent(selectedTab ?? .home)
-                }
+        }
+        // #0197: floating compose FAB — shown on every tab except Messages.
+        // Overlaid on the NavigationStack so it persists across pushed
+        // destinations. 20pt padding mirrors the MacBlueskyNav prototype.
+        .overlay(alignment: .bottomTrailing) {
+            if (selectedTab ?? .home) != .messages {
+                composeFAB
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
             }
-            // Keying the NavigationStack on the selected tab forces SwiftUI to
-            // create a fresh stack instance whenever the tab changes, which
-            // immediately clears any pushed views (e.g. ThreadView) and shows
-            // the new tab's root screen. Without this, macOS keeps the existing
-            // stack alive even though the root content has changed.
-            .id(selectedTab ?? AppTab.home)
-            .onChange(of: selectedTab) { _, _ in
-                resetTransientNavState()
-            }
-            // #0197: floating compose FAB — shown on every tab except
-            // Messages, matching the RN app's behavior. The FAB is
-            // overlaid on the NavigationStack so it persists across
-            // pushed destinations (ThreadView, ProfileScreen, etc.).
-            // 20pt padding mirrors the prototype (MacBlueskyNav
-            // HomeFeedView.swift ~line 77).
-            .overlay(alignment: .bottomTrailing) {
-                if (selectedTab ?? .home) != .messages {
-                    composeFAB
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 20)
-                }
-            }
+        }
+        // Drawer overlay sits above all content so the slide-in panel covers
+        // the full window area including the toolbar region.
+        .overlay(alignment: .leading) {
+            macOSDrawerOverlay
         }
         .background(theme.colors.background)
         .toolbarBackground(theme.colors.background, for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
+        // Hydrate viewer profile data for the drawer header on macOS.
+        .task(id: session.currentAccount?.did) {
+            await refreshViewerProfile()
+        }
+    }
+
+    /// Full-window overlay that implements the hamburger drawer on macOS.
+    ///
+    /// Mirrors the prototype's non-obvious solutions (`MacBlueskyNav/MenuDrawerView.swift`):
+    ///
+    /// - The overlay is **always present** (for animation) but gated with
+    ///   `allowsHitTesting(isPresented)` so the invisible closed state
+    ///   never steals clicks from content behind it.
+    /// - The scrim is a plain-styled `Button` (tappable *and* accessible —
+    ///   System Events can activate it via its accessibility role).
+    /// - `accessibilityHidden(!isPresented)` keeps VoiceOver from reaching
+    ///   the off-screen drawer when closed.
+    /// - `.isModal` accessibility trait while open restricts VoiceOver focus
+    ///   to drawer contents (prevents the rotor jumping to the feed behind
+    ///   the scrim).
+    /// - A named "Close menu" AX action on the panel gives VoiceOver users
+    ///   a direct dismiss path.
+    /// - Escape-to-dismiss via a hidden `.keyboardShortcut(.escape)` button
+    ///   inserted **only while open** so the shortcut never fires during
+    ///   normal (closed-drawer) use.
+    private var macOSDrawerOverlay: some View {
+        ZStack(alignment: .leading) {
+            // Scrim — a plain-styled Button so it is both tappable and
+            // accessible (System Events / VoiceOver can activate it).
+            Button(action: dismissMacDrawer) {
+                Color.black.opacity(showMacDrawer ? 0.35 : 0)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close menu")
+            .allowsHitTesting(showMacDrawer)
+            .animation(.easeInOut(duration: 0.25), value: showMacDrawer)
+
+            // Drawer panel — slides in from the leading edge.
+            macOSDrawerPanel
+                .offset(x: showMacDrawer ? 0 : -280)
+                .animation(.easeInOut(duration: 0.25), value: showMacDrawer)
+                .allowsHitTesting(showMacDrawer)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        // Block all hits on the underlying view when open; no-op when closed.
+        .allowsHitTesting(showMacDrawer)
+        // AX: hide from VoiceOver when closed (offscreen elements).
+        // When open, expose as modal so VoiceOver stays inside the drawer.
+        .accessibilityHidden(!showMacDrawer)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        // Escape key: only wired while the drawer is open so it doesn't
+        // intercept Escape during normal (closed-drawer) navigation.
+        .overlay {
+            if showMacDrawer {
+                Button(action: dismissMacDrawer) { EmptyView() }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .accessibilityHidden(true)
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    /// The drawer panel itself. Reuses `DrawerView` (shared with iOS) for
+    /// layout and navigation logic; wraps it in the shadow and AX action
+    /// matching the prototype.
+    private var macOSDrawerPanel: some View {
+        DrawerView(
+            selectedTab: $selectedTab,
+            currentAccount: session.currentAccount,
+            viewerAvatarURL: viewerAvatarURL,
+            viewerDisplayName: viewerDisplayName,
+            viewerFollowersCount: viewerFollowersCount,
+            viewerFollowingCount: viewerFollowingCount,
+            notificationBadge: notificationBadge,
+            onAppearOnce: {
+                Task { await refreshViewerProfile() }
+            },
+            onDismiss: { dismissMacDrawer() },
+            onPushMyFeeds:   { showSavedFeeds = true },
+            onPushLists:     { showLists = true },
+            onPushBookmarks: { showBookmarks = true },
+            onPushSettings:  { showSettings = true }
+        )
+        .shadow(color: .black.opacity(0.2), radius: 12, x: 4, y: 0)
+        // VoiceOver: expose a "Close menu" action on the panel so users
+        // can dismiss without moving focus to the scrim button.
+        .accessibilityAction(named: "Close menu", dismissMacDrawer)
+    }
+
+    private func dismissMacDrawer() {
+        withAnimation(.easeInOut(duration: 0.25)) { showMacDrawer = false }
+    }
+
+    /// Hydrates viewer profile data for the macOS drawer header.
+    /// Extracted from the iOS-only `refreshViewerAvatar` so both platforms
+    /// share the same `getProfile` fetch. Called from the macOS
+    /// `.task(id: session.currentAccount?.did)` modifier.
+    private func refreshViewerProfile() async {
+        guard let did = session.currentAccount?.did else {
+            viewerAvatarURL = nil
+            viewerDisplayName = nil
+            viewerFollowersCount = nil
+            viewerFollowingCount = nil
+            return
+        }
+        do {
+            let profile: ProfileDetailed = try await env.network.get(
+                lexicon: "app.bsky.actor.getProfile",
+                params: ["actor": did.rawValue]
+            )
+            viewerAvatarURL = profile.avatar
+            viewerDisplayName = profile.displayName
+            viewerFollowersCount = profile.followersCount
+            viewerFollowingCount = profile.followsCount
+        } catch {
+            mainTabViewLogger.debug("macOS viewer profile fetch failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
     #endif
 

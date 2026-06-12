@@ -158,56 +158,70 @@ final class BlueskyUITestHarness {
     }
 
     /// Blocks until `MainTabView` is on screen. The tab bar's accessibility
-    /// elements (or, on macOS, the sidebar) are present once the app is past
-    /// login. We key off the Home tab label, which both layouts expose.
+    /// elements (or, on macOS, the hamburger button from #0198) are present
+    /// once the app is past login. We key off the Home tab label (iOS) or the
+    /// "Open menu" hamburger button (macOS overlay-drawer layout, #0198).
     @discardableResult
     func waitForMainTabView(timeout: TimeInterval = 15) -> Bool {
-        // Either the custom iOS tab bar button or the macOS sidebar row carries
-        // the "Home" label; the regular-width split view does too.
+        // iOS: custom tab bar Button named "Home" or regular split-view cell.
+        // macOS (#0198): drawer is hidden when closed (`accessibilityHidden`),
+        // so use the always-visible hamburger toolbar button instead.
         let home = app.buttons["Home"]
         let homeCell = app.cells["Home"]
+        let hamburger = app.buttons["Open menu"]
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if home.exists || homeCell.exists { return true }
+            if home.exists || homeCell.exists || hamburger.exists { return true }
             if scriptErrorElement.exists { return false }
             usleep(200_000)
         }
-        return home.exists || homeCell.exists
+        return home.exists || homeCell.exists || hamburger.exists
     }
 
     // MARK: Cross-platform navigation
 
     /// Resolves a primary navigation destination by its visible title across
     /// both shells. On iOS the tabs are `Button`s (the custom compact tab bar
-    /// or the regular-width sidebar `Label`); on macOS they are selectable
-    /// sidebar `cells` inside the `NavigationSplitView` `List(selection:)`.
-    /// Returns whichever element type the running platform exposes so a single
-    /// test body drives navigation on iOS and macOS without `#if os` forks.
+    /// or the regular-width sidebar `Label`). On macOS (#0198) the tabs are
+    /// inside an overlay drawer; open the drawer first if needed.
     func tab(_ title: String) -> XCUIElement {
         let button = app.buttons[title]
         if button.exists { return button }
         let cell = app.cells[title]
         if cell.exists { return cell }
-        // Neither resolved yet (the shell may still be settling) — return the
-        // button query so callers' `waitForExistence` can poll it; the macOS
-        // sidebar cell is also reachable via `app.cells[title]` once present.
+        // Neither resolved yet — return the button query so callers'
+        // `waitForExistence` can poll it.
         return button
     }
 
     /// Taps a primary navigation destination by title on either shell. Waits
     /// briefly for the element to materialize so a freshly-launched or
     /// tab-switched shell has time to mount its sidebar / tab bar.
+    ///
+    /// On macOS (#0198) the nav items live inside the overlay drawer. If the
+    /// item isn't directly reachable (drawer is closed / hidden), this method
+    /// first taps the hamburger "Open menu" button to reveal the drawer, then
+    /// taps the destination.
     @discardableResult
     func tapTab(_ title: String, timeout: TimeInterval = 5) -> Bool {
-        // Prefer whichever element type currently exists; fall back to waiting
-        // on the button, then the cell, mirroring `waitForMainTabView`.
-        if app.buttons[title].waitForExistence(timeout: timeout) {
+        // iOS compact: custom tab bar Button; iOS regular: split-view Label Button.
+        if app.buttons[title].waitForExistence(timeout: 1) {
             app.buttons[title].firstMatch.tap()
             return true
         }
-        if app.cells[title].waitForExistence(timeout: timeout) {
+        // iOS / macOS split-view (iPad, legacy macOS sidebar): selectable cell.
+        if app.cells[title].waitForExistence(timeout: 1) {
             app.cells[title].firstMatch.tap()
             return true
+        }
+        // macOS #0198: drawer is hidden when closed. Open it, then tap.
+        let hamburger = app.buttons["Open menu"]
+        if hamburger.waitForExistence(timeout: timeout) {
+            hamburger.tap()
+            if app.buttons[title].waitForExistence(timeout: 3) {
+                app.buttons[title].firstMatch.tap()
+                return true
+            }
         }
         return false
     }
