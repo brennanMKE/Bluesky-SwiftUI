@@ -31,15 +31,17 @@ All planning docs live in `../Bluesky-Migration/`. Start there when resuming wor
 |---|-------|--------|--------|
 | [0001](../Bluesky-Migration/issues/0001.md) | Account session not persisted across app launches | BlueskyAuth | resolved |
 | [0002](../Bluesky-Migration/issues/0002.md) | Home feed posts not loaded after sign-in | BlueskyFeed | open |
-| [0186](../Bluesky-Migration/issues/0186.md) | DM conversation list fails to load: `chat.bsky.convo.listConvos` returns `MethodNotImplemented` | BlueskyMessages / BlueskyNetworking | resolved |
-| [0193](../Bluesky-Migration/issues/0193.md) | DM compose bar on iPhone has no option to attach an image | BlueskyMessages | open |
-| [0194](../Bluesky-Migration/issues/0194.md) | Sending an image in a DM does not work on macOS | BlueskyMessages | open |
-| [0195](../Bluesky-Migration/issues/0195.md) | Incoming DMs do not appear until the conversation is reloaded: add getLog polling while messages UI is visible | BlueskyMessages | open |
-| [0196](../Bluesky-Migration/issues/0196.md) | macOS top bar: trailing buttons crammed on the right; only the Feeds (`#`) button should remain | Bluesky-SwiftUI | resolved |
-| [0197](../Bluesky-Migration/issues/0197.md) | macOS: post button should be a floating button at the bottom right, as in the RN app | Bluesky-SwiftUI | resolved |
-| [0198](../Bluesky-Migration/issues/0198.md) | macOS: replace the sidebar with a hamburger-toggled menu drawer, as in the RN app | Bluesky-SwiftUI | resolved |
-| [0199](../Bluesky-Migration/issues/0199.md) | macOS Feeds screen shows placeholder "Feed" rows: `#` button routes to the bare SavedFeedsScreen instead of MyFeedsScreen | BlueskyFeed / Bluesky-SwiftUI | resolved |
-| [0200](../Bluesky-Migration/issues/0200.md) | Remove dead `SavedFeedsScreen` from BlueskyFeed (unreachable after #0199) | BlueskyFeed | open |
+| [0235](../Bluesky-Migration/issues/0235.md) | DM conversation list fails to load: `chat.bsky.convo.listConvos` returns `MethodNotImplemented` | BlueskyMessages / BlueskyNetworking | resolved |
+| [0242](../Bluesky-Migration/issues/0242.md) | DM compose bar on iPhone has no option to attach an image | BlueskyMessages | open |
+| [0243](../Bluesky-Migration/issues/0243.md) | Sending an image in a DM does not work on macOS | BlueskyMessages | open |
+| [0244](../Bluesky-Migration/issues/0244.md) | Incoming DMs do not appear until the conversation is reloaded: add getLog polling while messages UI is visible | BlueskyMessages | open |
+| [0245](../Bluesky-Migration/issues/0245.md) | macOS top bar: trailing buttons crammed on the right; only the Feeds (`#`) button should remain | Bluesky-SwiftUI | resolved |
+| [0246](../Bluesky-Migration/issues/0246.md) | macOS: post button should be a floating button at the bottom right, as in the RN app | Bluesky-SwiftUI | resolved |
+| [0247](../Bluesky-Migration/issues/0247.md) | macOS: replace the sidebar with a hamburger-toggled menu drawer, as in the RN app | Bluesky-SwiftUI | resolved |
+| [0248](../Bluesky-Migration/issues/0248.md) | macOS Feeds screen shows placeholder "Feed" rows: `#` button routes to the bare SavedFeedsScreen instead of MyFeedsScreen | BlueskyFeed / Bluesky-SwiftUI | resolved |
+| [0249](../Bluesky-Migration/issues/0249.md) | Remove dead `SavedFeedsScreen` from BlueskyFeed (unreachable after #0248) | BlueskyFeed | open |
+
+> Issue numbers #0186 and #0193–#0200 were re-homed to #0235 and #0242–#0249 in the 2026-07-26 history merge (Bluesky-Migration `e8503d4`) to resolve a two-machine numbering collision. The `issue/0196`–`issue/0199` branches in this repo, and the `#0186`/`#0196`–`#0200` prefixes on their squash commits, keep their original numbers — each re-homed issue carries a provenance note mapping them.
 
 Keep this table in sync with `../Bluesky-Migration/Issues.md`. File new issues there first, then add a row here.
 
